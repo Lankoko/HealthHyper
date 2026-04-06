@@ -1,0 +1,27 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: HealthHyper
+  datasource:
+    url: jdbc:mysql://localhost:3306/health_hyper?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
+    username: root
+    password: 111111
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+
+app:
+  jwt:
+    secret: HealthHyperJwtSecretKey2026ForDemoProjectX
+    expiration-hours: 72
+  ai:
+    base-url: http://localhost:8000
+    mock-enabled: true   # 云AI联调前设为 true，联调时改为 false

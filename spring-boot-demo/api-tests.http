@@ -1,0 +1,696 @@
+### HealthHyper 中台 API 测试用例
+### 用法：安装 VS Code 插件 "REST Client"，点开本文件，每条请求上方点 Send Request
+### 或把下面 @host 改成你的地址后，复制单条到 Apifox / Postman
+
+@host = http://localhost:8080
+@token = eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIzIiwidXNlcm5hbWUiOiJhcGl0ZXN0MSIsImlhdCI6MTc3NTc0NTU4MywiZXhwIjoxNzc2MDA0NzgzfQ.RazpxSOUgHIUNHnx_gZVwJ5EnriEvw05IJJFzSE7qC4
+@sessionId = 先执行「创建会话」后，把返回的 id 粘贴到这里
+
+# ── AI 端认证（无需 token，用 API Key 即可）─────────────────────────
+# 把下面 @userId 换成你登录后返回的 userId（如 1）
+@apiKey = HealthHyperAiToolKey2026
+@userId = 3
+
+############################################
+# 1. 认证（无需 Token）
+############################################
+
+### 1.1 注册（username 若已存在会失败，可改成 apitest2）
+POST {{host}}/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "apitest1",
+  "password": "123456",
+  "nickname": "测试用户",
+  "phone": "13800000000"
+}
+
+### 1.2 登录
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "apitest1",
+  "password": "123456"
+}
+
+############################################
+# 2. 健康档案（需要 Bearer Token，把上面登录返回的 token 填到文件头 @token）
+############################################
+
+### 2.1 获取当前用户健康档案
+GET {{host}}/api/user/profile
+Authorization: Bearer {{token}}
+
+### 2.2 更新健康档案
+PUT {{host}}/api/user/profile
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "gender": 1,
+  "heightCm": 175.0,
+  "weightKg": 68.5,
+  "bloodType": "A",
+  "medicalHistory": "无重大病史",
+  "allergyInfo": "青霉素过敏（测试2）",
+  "lifestyleInfo": "久坐办公，偶尔跑步"
+}
+
+############################################
+# 3. 对话会话（需要 Token）
+############################################
+
+### 3.1 创建新会话
+POST {{host}}/api/chat/sessions
+Authorization: Bearer {{token}}
+
+### 3.2 会话列表
+GET {{host}}/api/chat/sessions
+Authorization: Bearer {{token}}
+
+### 3.3 某会话的消息历史（把 @sessionId 换成 3.1 返回的 id）
+GET {{host}}/api/chat/sessions/{{sessionId}}/messages
+Authorization: Bearer {{token}}
+
+### 3.4 发送消息（SSE 流式，mock 模式下会逐字推送；插件会显示完整流）
+### 联调真 AI 时把 application.yml 里 mock-enabled 改为 false
+POST {{host}}/api/chat/sessions/{{sessionId}}/send
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "text": "你好，简单介绍一下你能做什么",
+  "imgBase64": null
+}
+
+### 3.5 发送消息（带「计划」二字，mock 会返回 ---ACTIONS--- 并自动写 health_plan 表）
+POST {{host}}/api/chat/sessions/{{sessionId}}/send
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "text": "帮我制定一个健康计划",
+  "imgBase64": null
+}
+
+### 3.6 图片消息（把 YOUR_BASE64 换成真实 base64，须带 data:image/jpeg;base64, 前缀）
+POST {{host}}/api/chat/sessions/{{sessionId}}/send
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "text": "请看看这张检查单",
+  "imgBase64": "data:image/jpeg;base64,YOUR_BASE64_HERE"
+}
+
+############################################
+# ══════════════════════════════════════════
+#   以下为新增接口，统一使用 API Key 认证
+#   （模拟 AI 端 Tool 调用中台的场景）
+#
+#   测试顺序建议：
+#   4 生理数据 → 5 基线 → 6 睡眠 → 7 用药 →
+#   8 日常记录 → 9 医疗报告 → 10 健康计划 →
+#   11 AI摘要 → 12 异常告警
+# ══════════════════════════════════════════
+############################################
+
+############################################
+# 4. 实时生理数据 /api/vital
+#    模拟：手机上报数据 → AI 查询
+############################################
+
+### 4.1 上报一条生理数据（手机端调用，用 JWT）
+### 先跑这条写入数据，后面 4.2/4.3 才能有结果
+POST {{host}}/api/vital/upload
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "hr": 78,
+  "spo2": 98,
+  "bt": 36.6,
+  "activity": 10,
+  "sdann": 120.5,
+  "hrCv": 0.048,
+  "flag": 0
+}
+
+### 4.2 AI Tool: 获取最新全部生理数据
+GET {{host}}/api/vital/current?metric=all
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+### 4.3 AI Tool: 只看心率
+GET {{host}}/api/vital/current?metric=hr
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+### 4.4 AI Tool: 最近7天生理数据统计（均值/最大/最小）
+GET {{host}}/api/vital/stats?metric=all&days=7
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+### 4.5 上报一条轻度异常数据（flag=1，生成告警但不触发AI对话）
+POST {{host}}/api/vital/upload
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "hr": 108,
+  "spo2": 92,
+  "bt": 37.9,
+  "activity": 5,
+  "flag": 1
+}
+
+### 4.6 上报一条严重异常数据（flag=2，severity>1 → 自动生成告警 + 触发AI主动对话）
+### 执行后检查 health_alert 表和 chat_session 表（source=system_alert）
+POST {{host}}/api/vital/upload
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "hr": 135,
+  "spo2": 88,
+  "bt": 38.5,
+  "activity": 2,
+  "flag": 2
+}
+
+### 4.7 上报夜间生理数据（带时间戳，用于睡眠聚合测试 —— 在 6.1 前执行）
+POST {{host}}/api/vital/upload
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "hr": 62,
+  "spo2": 97,
+  "bt": 36.3,
+  "activity": 0,
+  "flag": 0,
+  "recordedAt": "2026-04-09T01:00:00"
+}
+
+### 4.8 上报夜间生理数据 2
+POST {{host}}/api/vital/upload
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "hr": 58,
+  "spo2": 98,
+  "bt": 36.1,
+  "activity": 0,
+  "flag": 0,
+  "recordedAt": "2026-04-09T03:30:00"
+}
+
+### 4.9 上报夜间生理数据 3
+POST {{host}}/api/vital/upload
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "hr": 65,
+  "spo2": 96,
+  "bt": 36.4,
+  "activity": 0,
+  "flag": 0,
+  "recordedAt": "2026-04-09T06:00:00"
+}
+
+############################################
+# 5. 生理基线 /api/baseline
+#    模拟：AI 分析历史数据后写入个人基线
+############################################
+
+### 5.1 AI Tool: 查看当前全部基线（第一次没数据返回 message）
+GET {{host}}/api/baseline?metric=all
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+### 5.2 AI Tool: 更新单个指标基线（心率基线）
+PUT {{host}}/api/baseline
+Content-Type: application/json
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+{
+  "metric": "hr",
+  "value": 72.5
+}
+
+### 5.3 AI Tool: 更新血氧基线
+PUT {{host}}/api/baseline
+Content-Type: application/json
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+{
+  "metric": "spo2",
+  "value": 98.0
+}
+
+### 5.4 AI Tool: 一次性更新全部基线
+PUT {{host}}/api/baseline/all
+Content-Type: application/json
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+{
+  "hrBase": 72.5,
+  "spo2Base": 97.0,
+  "btBase": 36.5,
+  "hrCvBase": 0.05,
+  "sdannBase": 120.0
+}
+
+### 5.5 再次查看，确认基线已写入
+GET {{host}}/api/baseline?metric=all
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+############################################
+# 6. 睡眠数据 /api/sleep
+#    模拟：手机上报分期 → AI 查询分析 → 写睡眠计划
+############################################
+
+### 6.1 上报一晚睡眠数据（手机端调用，含分期明细）
+### ⚠️ 先执行 4.7/4.8/4.9 上报夜间生理数据，sleep_session 的整晚心率/血氧/体温才会有值
+POST {{host}}/api/sleep/upload
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "sleepDate": "2026-04-08",
+  "startTime": "2026-04-08T23:15:00",
+  "endTime": "2026-04-09T07:20:00",
+  "stages": [
+    { "stage": "n1", "startTime": "2026-04-08T23:15:00", "durationSec": 900 },
+    { "stage": "n2", "startTime": "2026-04-08T23:30:00", "durationSec": 5400 },
+    { "stage": "n3", "startTime": "2026-04-09T01:00:00", "durationSec": 4500 },
+    { "stage": "rem", "startTime": "2026-04-09T02:15:00", "durationSec": 5400 },
+    { "stage": "n2", "startTime": "2026-04-09T03:45:00", "durationSec": 3600 },
+    { "stage": "n3", "startTime": "2026-04-09T04:45:00", "durationSec": 3600 },
+    { "stage": "rem", "startTime": "2026-04-09T05:45:00", "durationSec": 3600 },
+    { "stage": "wake", "startTime": "2026-04-09T06:45:00", "durationSec": 2100 }
+  ]
+}
+
+### 6.2 AI Tool: 获取最近一晚睡眠（含分期统计、生理指标）
+GET {{host}}/api/sleep/latest
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+### 6.3 AI Tool: 获取最近3晚睡眠
+GET {{host}}/api/sleep/recent?days=3
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+### 6.4 AI Tool: 查看当前睡眠改善计划（没有则返回 null）
+GET {{host}}/api/sleep/plan
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+### 6.5 AI Tool: 回填睡眠分析结论（把 1 换成 6.1 返回的 sleep_session.id）
+PUT {{host}}/api/sleep/1/analysis
+Content-Type: application/json
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+{
+  "aiAnalysis": "整晚睡眠时长约8小时，深睡占比约28%，属于正常范围。夜间心率均值62bpm，偏低且稳定。建议继续保持规律作息。"
+}
+
+### 6.6 再次获取最新一晚，确认 ai_analysis 已回填
+GET {{host}}/api/sleep/latest
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+### 6.7 AI Tool: 更新/创建睡眠改善计划
+PUT {{host}}/api/sleep/plan
+Content-Type: application/json
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+{
+  "items_json": "[{\"index\":0,\"desc\":\"每天下午散步30分钟\",\"category\":\"exercise\"},{\"index\":1,\"desc\":\"睡前1小时不接触电子屏幕\",\"category\":\"sleep\"},{\"index\":2,\"desc\":\"晚上10点半之前上床\",\"category\":\"sleep\"},{\"index\":3,\"desc\":\"睡前做10分钟深呼吸练习\",\"category\":\"sleep\"}]"
+}
+
+############################################
+# 7. 用药管理 /api/medication
+############################################
+
+### 7.1 AI Tool: 查询当前最新用药计划（首次没有则返回 null）
+GET {{host}}/api/medication/plan/latest
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+### 7.2 AI Tool: 创建用药计划（AI 传日期）
+POST {{host}}/api/medication/plan
+Content-Type: application/json
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+{
+  "drugName": "头孢克洛胶囊",
+  "dosage": "每次0.5g（2粒）",
+  "frequency": "每日3次",
+  "timeSlots": "08:00,12:00,18:00",
+  "startDate": "2026-04-09",
+  "endDate": "2026-04-16",
+  "notes": "饭后服用，对头孢克洛胶囊过敏者慎用"
+}
+
+### 7.2b AI Tool: 创建用药计划（AI 不传日期，中台自动默认 startDate=今天）
+POST {{host}}/api/medication/plan
+Content-Type: application/json
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+{
+  "drugName": "布洛芬缓释胶囊",
+  "dosage": "每次0.3g（1粒）",
+  "frequency": "每日2次",
+  "timeSlots": "08:00,20:00",
+  "notes": "饭后服用，疼痛缓解后停药"
+}
+
+### 7.3 再次查询，确认计划创建成功
+GET {{host}}/api/medication/plan/latest
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+### 7.4 AI Tool: 记录一次服药（实际时间）
+POST {{host}}/api/medication/log
+Content-Type: application/json
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+{
+  "drugName": "头孢克洛",
+  "time": "2026-04-09 08:15:00"
+}
+
+### 7.5 AI Tool: 记录另一次服药
+POST {{host}}/api/medication/log
+Content-Type: application/json
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+{
+  "drugName": "阿莫西林胶囊",
+  "time": "2026-04-09 12:10:00"
+}
+
+### 7.6 AI Tool: 查看最近3天服药记录
+GET {{host}}/api/medication/log?days=3
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+############################################
+# 8. 日常记录 /api/daily（纯日志记事本）
+#    log_type: diet / exercise / mood / symptom / other
+#    extra_json: 不固定字段，按需使用
+############################################
+
+### 8.1 AI Tool: 记录一条饮食
+POST {{host}}/api/daily
+Content-Type: application/json
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+{
+  "logType": "diet",
+  "content": "午饭吃了一碗米饭、西红柿炒蛋、紫菜汤",
+  "extraJson": "{\"meal_type\":\"lunch\",\"food_items\":[{\"name\":\"米饭\",\"amount\":\"1碗\"},{\"name\":\"西红柿炒蛋\",\"amount\":\"1份\"},{\"name\":\"紫菜汤\",\"amount\":\"1碗\"}]}"
+}
+
+### 8.2 AI Tool: 记录运动
+POST {{host}}/api/daily
+Content-Type: application/json
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+{
+  "logType": "exercise",
+  "content": "下午跑步30分钟，强度适中",
+  "extraJson": "{\"exercise_type\":\"running\",\"duration_min\":30,\"intensity\":\"medium\"}"
+}
+
+### 8.3 AI Tool: 记录情绪
+POST {{host}}/api/daily
+Content-Type: application/json
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+{
+  "logType": "mood",
+  "content": "今天工作压力有点大，有些焦虑",
+  "extraJson": "{\"mood_score\":2,\"tags\":[\"anxious\",\"stressed\"]}"
+}
+
+### 8.4 AI Tool: 记录症状（symptom_assessment 结束后调用）
+POST {{host}}/api/daily
+Content-Type: application/json
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+{
+  "logType": "symptom",
+  "content": "下午3点开始头疼，位置在太阳穴，持续约2小时后自行缓解",
+  "extraJson": "{\"symptom_name\":\"headache\",\"severity\":2,\"duration_desc\":\"持续约2小时\"}"
+}
+
+### 8.5 AI Tool: 一般记录（extra_json 是不固定字段，什么都可以存）
+POST {{host}}/api/daily
+Content-Type: application/json
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+{
+  "logType": "other",
+  "content": "今天完成了散步和睡前不刷手机，没做到深呼吸练习",
+  "extraJson": "{\"note\":\"自由记录\"}"
+}
+
+### 8.6 AI Tool: 查询最近7天所有记录
+GET {{host}}/api/daily?days=7&limit=20
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+### 8.7 AI Tool: 只查症状记录
+GET {{host}}/api/daily?logType=symptom&days=7
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+### 8.8 AI Tool: 只查情绪记录
+GET {{host}}/api/daily?logType=mood&days=7
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+############################################
+# 9. 医疗报告 /api/medical
+############################################
+
+### 9.1 AI Tool: 保存一份体检报告分析
+POST {{host}}/api/medical/report
+Content-Type: application/json
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+{
+  "reportType": "exam_report",
+  "reportTitle": "2026年春季体检报告解读",
+  "reportContent": "{\"blood_glucose\":6.2,\"cholesterol\":5.8,\"blood_pressure\":\"128/82\",\"summary\":\"血糖偏高（参考值<6.1），胆固醇临界偏高\",\"risks\":\"糖尿病前期风险\",\"suggestion\":\"减少精制碳水摄入，增加有氧运动，3个月后复查血糖\"}",
+  "recordDate": "2026-04-01"
+}
+
+### 9.2 AI Tool: 保存一份健康分析报告
+POST {{host}}/api/medical/report
+Content-Type: application/json
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+{
+  "reportType": "health_analysis",
+  "reportTitle": "近期睡眠健康分析",
+  "reportContent": "{\"analysis_period\":\"最近7天\",\"avg_sleep_hours\":7.2,\"deep_sleep_ratio\":\"14%（正常15-25%）\",\"issues\":\"深睡比例偏低，可能影响日间精力恢复\",\"suggestions\":[\"规律作息时间\",\"减少咖啡因摄入\",\"睡前避免剧烈运动\"]}"
+}
+
+### 9.3 查询医疗记录列表（手机端）
+GET {{host}}/api/medical/records?limit=10
+Authorization: Bearer {{token}}
+
+### 9.4 按类型筛选
+GET {{host}}/api/medical/records?recordType=exam_report&limit=5
+Authorization: Bearer {{token}}
+
+############################################
+# 10. 健康计划 /api/plan
+############################################
+
+### 10.1 AI Tool: 创建健康计划
+POST {{host}}/api/plan
+Content-Type: application/json
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+{
+  "title": "血糖管理计划",
+  "content": "[{\"index\":0,\"desc\":\"每天饭后散步20分钟\",\"category\":\"exercise\"},{\"index\":1,\"desc\":\"减少白米饭摄入，改用杂粮饭\",\"category\":\"diet\"},{\"index\":2,\"desc\":\"每周记录一次空腹血糖\",\"category\":\"monitor\"},{\"index\":3,\"desc\":\"每天喝水不少于1500ml\",\"category\":\"diet\"}]",
+  "days": 30
+}
+
+### 10.2 AI Tool: 查看最近3天内创建的计划
+GET {{host}}/api/plan?days=3
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+### 10.3 查看最新一个未完成计划
+GET {{host}}/api/plan/latest
+Authorization: Bearer {{token}}
+
+### 10.4 打卡（把 1 换成 10.1 返回的计划 id）
+PUT {{host}}/api/plan/1/checkin
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+### 10.5 取消打卡
+PUT {{host}}/api/plan/1/uncheckin
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+############################################
+# 11. AI 健康摘要 / 对话记忆 /api/ai/summary
+#     模拟：AI 每轮对话结束后保存摘要
+############################################
+
+### 11.1 AI Tool: 获取当前摘要（首次为 null）
+GET {{host}}/api/ai/summary/latest
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+### 11.2 AI Tool: 保存对话摘要（第一次创建）
+POST {{host}}/api/ai/summary
+Content-Type: application/json
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+{
+  "summary": "{\"recent_topics\":[\"睡眠质量差\",\"头疼\",\"血糖偏高\"],\"key_findings\":\"深睡不足，可能与工作压力有关；血糖临界偏高需控制饮食\",\"action_taken\":\"已创建睡眠改善计划和血糖管理计划\",\"follow_up\":\"3个月后复查血糖\"}"
+}
+
+### 11.3 AI Tool: 再次查看，确认摘要已保存
+GET {{host}}/api/ai/summary/latest
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+### 11.4 AI Tool: 更新摘要（新增话题，覆盖旧内容）
+POST {{host}}/api/ai/summary
+Content-Type: application/json
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+{
+  "summary": "{\"recent_topics\":[\"睡眠质量差\",\"头疼\",\"血糖偏高\",\"用药阿莫西林\"],\"key_findings\":\"深睡不足；血糖临界偏高；近期有感染症状服用抗生素\",\"action_taken\":\"已创建睡眠改善计划和血糖管理计划；用药计划已创建\",\"follow_up\":\"3个月后复查血糖；抗生素疗程结束后注意菌群恢复\"}"
+}
+
+############################################
+# 12. 异常告警 /api/alert
+############################################
+
+### ⚠️ 现在上报 vital_sign 时 flag>0 会自动生成 health_alert（见4.5/4.6），
+### 以下为手动创建告警的接口（仍可用于手动补录或测试）
+
+### 12.1 手动创建告警
+POST {{host}}/api/alert
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "alertType": "hr_abnormal",
+  "severity": 2,
+  "message": "用户心率持续偏高，最近一次记录108bpm，基线为72bpm"
+}
+
+### 12.2 创建血氧低告警
+POST {{host}}/api/alert
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "alertType": "spo2_low",
+  "severity": 3,
+  "message": "血氧饱和度下降至92%，低于正常下限95%"
+}
+
+### 12.3 查看全部告警
+GET {{host}}/api/alert
+Authorization: Bearer {{token}}
+
+### 12.4 只看未读告警
+GET {{host}}/api/alert?unreadOnly=true
+Authorization: Bearer {{token}}
+
+### 12.5 标记第一条告警已读（把下面 1 换成实际 id）
+PUT {{host}}/api/alert/1/read
+Authorization: Bearer {{token}}
+
+### 12.6 再次查看未读，确认已减少
+GET {{host}}/api/alert?unreadOnly=true
+Authorization: Bearer {{token}}
+
+############################################
+# 13. 组合验证：模拟一个完整 AI 工具调用流程
+#     场景：用户说"我最近睡眠不好，帮我看看"
+#     AI 依次调用以下 Tool：
+############################################
+
+### Step 1: 获取用户档案（了解基本情况）
+GET {{host}}/api/user/profile
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+### Step 2: 获取最近3晚睡眠数据（分析睡眠）
+GET {{host}}/api/sleep/recent?days=3
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+### Step 3: 获取近7天情绪记录（判断压力因素）
+GET {{host}}/api/daily?logType=mood&days=7
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+### Step 4: 获取生理基线（用于异常判断参考）
+GET {{host}}/api/baseline?metric=all
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+### Step 5: 获取近7天生理统计（夜间心率/血氧趋势）
+GET {{host}}/api/vital/stats?metric=all&days=7
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+### Step 6: AI 分析完毕，写入睡眠改善计划
+PUT {{host}}/api/sleep/plan
+Content-Type: application/json
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+{
+  "items_json": "[{\"index\":0,\"desc\":\"固定晚上11点上床，早上7点起床\",\"category\":\"sleep\"},{\"index\":1,\"desc\":\"睡前1小时不看手机/电脑\",\"category\":\"sleep\"},{\"index\":2,\"desc\":\"下午3点后不喝含咖啡因饮品\",\"category\":\"diet\"},{\"index\":3,\"desc\":\"每天下午散步20分钟\",\"category\":\"exercise\"}]"
+}
+
+### Step 7: 保存本次对话摘要
+POST {{host}}/api/ai/summary
+Content-Type: application/json
+X-Api-Key: {{apiKey}}
+X-User-Id: {{userId}}
+
+{
+  "summary": "{\"recent_topics\":[\"睡眠质量差\"],\"key_findings\":\"连续3晚深睡比例不足15%，情绪评分偏低（2-3分），夜间心率偏高（均值78bpm vs基线72bpm）\",\"action_taken\":\"已创建睡眠改善计划\",\"follow_up\":\"一周后跟进睡眠数据变化\"}"
+}

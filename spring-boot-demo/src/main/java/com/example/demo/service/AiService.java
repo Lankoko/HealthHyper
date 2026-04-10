@@ -50,24 +50,41 @@ public class AiService {
         "\"days\":7}}]";
 
     /**
-     * 流式调用云 AI 的 /chat/stream 接口。
-     * 每收到一个 content 片段就调用 onContent，流结束后调用 onComplete。
-     * 该方法是阻塞的，应在独立线程中调用。
+     * 流式调用云 AI 的接口。
+     *
+     * 请求格式（POST /api/v1/chat/stream）：
+     *   { "user_id": "2", "thread_id": "5", "text": "...", "image_url": "data:image/jpeg;base64,..." }
+     *   注：image_url 无图时整个字段不传
+     *
+     * 响应格式（SSE）：
+     *   event: status\ndata: {...}   → 状态行，跳过
+     *   data: {"content": "..."}     → 内容片段
+     *   data: {}                     → 结束标志
+     *
+     * @param text      用户消息文本（可含健康上下文前缀）
+     * @param imgBase64 图片 base64（含 data:image/jpeg;base64, 前缀），无图传 null
+     * @param userId    中台用户 ID，透传给 AI 做多用户隔离
+     * @param sessionId 中台会话 ID，作为 thread_id（全局唯一，不同用户的 session 不重复）
      */
-    public void streamChat(String prompt, String imgBase64,
+    public void streamChat(String text, String imgBase64, Long userId, Long sessionId,
                            Consumer<String> onContent, Runnable onComplete) {
         if (mockEnabled) {
-            streamMock(prompt, onContent, onComplete);
+            streamMock(text, onContent, onComplete);
             return;
         }
 
         try {
-            Map<String, String> body = new HashMap<>();
-            body.put("text", prompt);
-            body.put("img_url", imgBase64 != null ? imgBase64 : "");
+            Map<String, Object> body = new HashMap<>();
+            body.put("user_id", userId.toString());
+            body.put("thread_id", sessionId.toString());
+            body.put("text", text != null ? text : "");
+            if (imgBase64 != null && !imgBase64.isBlank()) {
+                body.put("image_url", imgBase64);
+            }
+            // 无图时不传 image_url 字段（队友要求）
 
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(aiBaseUrl + "/chat/stream"))
+                    .uri(URI.create(aiBaseUrl + "/api/v1/chat/stream"))
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body)))
                     .timeout(Duration.ofMinutes(3))
@@ -79,18 +96,29 @@ public class AiService {
             response.body().forEach(line -> {
                 String trimmed = line.trim();
                 if (trimmed.isEmpty()) return;
-                if ("[DONE]".equals(trimmed)) return;
 
-                try {
-                    JsonNode node = objectMapper.readTree(trimmed);
-                    if (node.has("content")) {
-                        String content = node.get("content").asText();
-                        if (!content.isEmpty()) {
-                            onContent.accept(content);
+                // event: 开头的行（如 event: status）直接跳过
+                if (trimmed.startsWith("event:")) return;
+
+                // data: 开头的行
+                if (trimmed.startsWith("data:")) {
+                    String dataStr = trimmed.substring(5).trim();
+                    if (dataStr.isEmpty()) return;
+
+                    try {
+                        JsonNode node = objectMapper.readTree(dataStr);
+                        // {} 是结束标志，不处理内容
+                        if (node.isEmpty()) return;
+
+                        if (node.has("content")) {
+                            String content = node.get("content").asText();
+                            if (!content.isEmpty()) {
+                                onContent.accept(content);
+                            }
                         }
+                    } catch (Exception e) {
+                        log.warn("解析AI响应行失败: {}", trimmed);
                     }
-                } catch (Exception e) {
-                    log.warn("解析AI响应行失败: {}", trimmed);
                 }
             });
 
@@ -105,9 +133,9 @@ public class AiService {
      * 本地 mock 模式，模拟流式响应。
      * 若用户消息包含"计划"关键字，回复中附带 ACTIONS 指令，用于测试计划创建流程。
      */
-    private void streamMock(String prompt, Consumer<String> onContent, Runnable onComplete) {
+    private void streamMock(String text, Consumer<String> onContent, Runnable onComplete) {
         log.info("[MOCK AI] 触发 mock 响应");
-        boolean withPlan = prompt != null && (prompt.contains("计划") || prompt.contains("plan"));
+        boolean withPlan = text != null && (text.contains("计划") || text.contains("plan"));
         String[] parts = withPlan
                 ? splitByChar(MOCK_PLAN_REPLY)
                 : MOCK_REPLY_PARTS;

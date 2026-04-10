@@ -11,8 +11,11 @@ import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 import java.util.List;
 
+@Tag(name = "2. AI 对话", description = "会话管理 + SSE 流式发送消息")
 @RestController
 @RequestMapping("/api/chat")
 @RequiredArgsConstructor

@@ -20,7 +20,8 @@ public class HealthProfileService {
 
     private final HealthProfileMapper profileMapper;
     private final HealthProfileHistoryMapper historyMapper;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
+    private final SystemTriggerService systemTriggerService;
 
     public HealthProfile getProfile(Long userId) {
         HealthProfile profile = profileMapper.selectOne(
@@ -62,6 +63,14 @@ public class HealthProfileService {
         }
 
         saveHistory(userId, profile, triggerSource);
+
+        try {
+            String snapshot = objectMapper.writeValueAsString(profile);
+            systemTriggerService.triggerSummaryUpdate(userId, snapshot);
+        } catch (Exception e) {
+            log.warn("序列化档案用于AI触发失败", e);
+        }
+
         return profile;
     }
 

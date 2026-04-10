@@ -10,8 +10,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 import java.util.Map;
 
+@Tag(name = "1. 认证", description = "注册 / 登录（无需 Token）")
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor

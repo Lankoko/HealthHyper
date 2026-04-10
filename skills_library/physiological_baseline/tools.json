@@ -1,0 +1,3 @@
+{
+  "tools": ["update_all_baseline", "update_one_baseline", "get_baseline"]
+}

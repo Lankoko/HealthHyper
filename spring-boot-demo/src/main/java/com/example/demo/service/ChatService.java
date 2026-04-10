@@ -31,10 +31,13 @@ public class ChatService {
     private final HealthProfileMapper healthProfileMapper;
     private final HealthPlanMapper healthPlanMapper;
     private final AiService aiService;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     private final ExecutorService executor = Executors.newCachedThreadPool();
 
+    /** @deprecated AI 已切换为 Skill Tool 直接调中台 API，ACTIONS 仅作兼容保留 */
+    @SuppressWarnings("DeprecatedIsStillUsed")
+    @Deprecated
     private static final String ACTIONS_MARKER = "---ACTIONS---";
 
     // ==================== 会话管理 ====================
@@ -101,13 +104,14 @@ public class ChatService {
         userMsg.setCreatedAt(LocalDateTime.now());
         chatMessageMapper.insert(userMsg);
 
-        // 2. 组装 prompt
-        String prompt = buildPrompt(userId, sessionId, req.getText());
+        // 2. AI 那边自己管多用户多标签页记忆，中台只传用户原始消息
+        //    健康上下文（档案/摘要）可在首轮时作为前缀注入，后续由 AI 侧记忆维护
+        String textToSend = req.getText();
 
         // 3. 流式调用 AI 并透传给手机
         StringBuilder fullResponse = new StringBuilder();
 
-        aiService.streamChat(prompt, req.getImgBase64(),
+        aiService.streamChat(textToSend, req.getImgBase64(), userId, sessionId,
                 content -> {
                     fullResponse.append(content);
                     try {
@@ -157,73 +161,46 @@ public class ChatService {
                 });
     }
 
-    // ==================== Prompt 组装 ====================
+    // ==================== 上下文辅助 ====================
 
-    private String buildPrompt(Long userId, Long sessionId, String userMessage) {
+    /**
+     * 获取用户健康上下文摘要（供后续首轮注入或 AI 工具调用参考）。
+     * 当前联调阶段 AI 侧自行维护记忆，此方法暂不在发消息流程中调用。
+     */
+    @SuppressWarnings("unused")
+    private String buildHealthContext(Long userId) {
         StringBuilder sb = new StringBuilder();
 
-        // 系统指令
-        sb.append("你是一位专业的个人健康管家AI助手。请基于用户的健康数据和对话内容，提供个性化的健康分析和建议。\n\n");
-        sb.append("规则：\n");
-        sb.append("1. 回答应基于用户的实际健康数据，不要凭空编造数据\n");
-        sb.append("2. 涉及严重健康问题时，建议用户及时就医，不要替代医生诊断\n");
-        sb.append("3. 语气亲切但专业\n");
-        sb.append("4. 如果你认为需要为用户创建健康计划，请在回复末尾附上结构化指令\n");
-        sb.append("5. 如果用户发送了医疗报告图片，请提取其中的关键信息并结构化整理\n\n");
-        sb.append("当你需要创建健康计划时，在回复的可见文本之后，另起一行以 ---ACTIONS--- 开头，用 JSON 数组描述操作：\n");
-        sb.append("---ACTIONS---\n");
-        sb.append("[{\"action\": \"create_plan\", \"data\": {\"title\": \"计划标题\", \"items\": [{\"desc\": \"具体事项\", \"category\": \"分类\"}], \"days\": 7}}]\n\n");
-
-        // 健康摘要
         AiHealthSummary summary = aiHealthSummaryMapper.selectOne(
                 new LambdaQueryWrapper<AiHealthSummary>()
                         .eq(AiHealthSummary::getUserId, userId));
         if (summary != null && summary.getSummaryJson() != null) {
-            sb.append("## 当前用户健康概况\n");
-            sb.append(summary.getSummaryJson()).append("\n\n");
+            sb.append("## 用户健康概况\n").append(summary.getSummaryJson()).append("\n\n");
         }
 
-        // 基本档案
         HealthProfile profile = healthProfileMapper.selectOne(
                 new LambdaQueryWrapper<HealthProfile>()
                         .eq(HealthProfile::getUserId, userId));
         if (profile != null) {
-            sb.append("## 用户基本信息\n");
-            if (profile.getGender() != null) {
+            sb.append("## 基本信息\n");
+            if (profile.getGender() != null)
                 sb.append("性别: ").append(profile.getGender() == 1 ? "男" : "女").append("\n");
-            }
-            if (profile.getHeightCm() != null) sb.append("身高: ").append(profile.getHeightCm()).append("cm\n");
-            if (profile.getWeightKg() != null) sb.append("体重: ").append(profile.getWeightKg()).append("kg\n");
-            if (profile.getMedicalHistory() != null) sb.append("病史: ").append(profile.getMedicalHistory()).append("\n");
-            if (profile.getAllergyInfo() != null) sb.append("过敏: ").append(profile.getAllergyInfo()).append("\n");
-            sb.append("\n");
+            if (profile.getHeightCm() != null)
+                sb.append("身高: ").append(profile.getHeightCm()).append("cm\n");
+            if (profile.getWeightKg() != null)
+                sb.append("体重: ").append(profile.getWeightKg()).append("kg\n");
+            if (profile.getMedicalHistory() != null)
+                sb.append("病史: ").append(profile.getMedicalHistory()).append("\n");
+            if (profile.getAllergyInfo() != null)
+                sb.append("过敏: ").append(profile.getAllergyInfo()).append("\n");
         }
-
-        // 对话历史（最近10条）
-        List<ChatMessage> history = chatMessageMapper.selectList(
-                new LambdaQueryWrapper<ChatMessage>()
-                        .eq(ChatMessage::getSessionId, sessionId)
-                        .orderByDesc(ChatMessage::getCreatedAt)
-                        .last("LIMIT 10"));
-        if (!history.isEmpty()) {
-            sb.append("## 对话历史\n");
-            for (int i = history.size() - 1; i >= 0; i--) {
-                ChatMessage msg = history.get(i);
-                String roleLabel = "user".equals(msg.getRole()) ? "用户" : "助手";
-                sb.append(roleLabel).append(": ").append(msg.getContent()).append("\n");
-            }
-            sb.append("\n");
-        }
-
-        // 本次用户消息
-        sb.append("## 用户消息\n");
-        sb.append(userMessage != null ? userMessage : "");
 
         return sb.toString();
     }
 
-    // ==================== ACTIONS 处理 ====================
+    // ==================== ACTIONS 处理（遗留兼容，AI 已切换 Skill Tool） ====================
 
+    @Deprecated
     private void processActions(Long userId, Long sessionId, String actionsJson) {
         try {
             List<Map<String, Object>> actions = objectMapper.readValue(
@@ -243,6 +220,7 @@ public class ChatService {
         }
     }
 
+    @Deprecated
     private void handleCreatePlan(Long userId, Long sessionId, Map<String, Object> data) {
         try {
             HealthPlan plan = new HealthPlan();
@@ -251,7 +229,7 @@ public class ChatService {
             plan.setItemsJson(objectMapper.writeValueAsString(data.get("items")));
             plan.setSource("ai");
             plan.setChatSessionId(sessionId);
-            plan.setStatus(1);
+            plan.setStatus(0);
             plan.setStartDate(LocalDate.now());
 
             Object days = data.get("days");

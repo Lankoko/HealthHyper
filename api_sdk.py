@@ -139,9 +139,9 @@ def obtain_multi_night_sleep(days: int = 7) -> str:
     return str(result.get("data", []))
 
 
-def update_sleep_analysis(session_id: int, ai_analysis: str) -> str:
-    """AI 回填睡眠分析结论"""
-    result = _put(f"/api/sleep/{session_id}/analysis", {"aiAnalysis": ai_analysis})
+def update_sleep_analysis(ai_analysis: str) -> str:
+    """AI 回填最新一条睡眠记录的分析结论（无需传 ID）"""
+    result = _put("/api/sleep/latest/analysis", {"aiAnalysis": ai_analysis})
     return "回填成功" if result.get("code") == 200 else str(result)
 
 
@@ -179,8 +179,8 @@ def add_medication_plan(
 
 
 def obtain_medication_plan() -> str:
-    """获取最新用药计划"""
-    result = _get("/api/medication/plan/latest")
+    """获取全部有效用药计划"""
+    result = _get("/api/medication/plan/list")
     return str(result.get("data"))
 
 

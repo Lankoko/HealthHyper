@@ -5,7 +5,9 @@ import com.example.demo.common.BusinessException;
 import com.example.demo.common.JwtUtil;
 import com.example.demo.dto.auth.LoginRequest;
 import com.example.demo.dto.auth.RegisterRequest;
+import com.example.demo.entity.HealthProfile;
 import com.example.demo.entity.User;
+import com.example.demo.mapper.HealthProfileMapper;
 import com.example.demo.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
 import org.mindrot.jbcrypt.BCrypt;
@@ -21,6 +23,7 @@ public class AuthService {
 
     private final UserMapper userMapper;
     private final JwtUtil jwtUtil;
+    private final HealthProfileMapper healthProfileMapper;
 
     public Map<String, Object> register(RegisterRequest req) {
         if (req.getUsername() == null || req.getUsername().isBlank()) {
@@ -64,11 +67,15 @@ public class AuthService {
     }
 
     private Map<String, Object> buildLoginResult(User user, String token) {
+        boolean isNewUser = healthProfileMapper.selectOne(
+                new LambdaQueryWrapper<HealthProfile>()
+                        .eq(HealthProfile::getUserId, user.getId())) == null;
         Map<String, Object> result = new HashMap<>();
         result.put("token", token);
         result.put("userId", user.getId());
         result.put("username", user.getUsername());
         result.put("nickname", user.getNickname());
+        result.put("isNewUser", isNewUser);
         return result;
     }
 }

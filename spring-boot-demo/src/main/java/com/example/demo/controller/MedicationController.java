@@ -28,9 +28,21 @@ public class MedicationController {
         return Result.ok(medicationService.addPlan(UserContext.get(), req));
     }
 
-    @GetMapping("/plan/latest")
-    public Result<MedicationPlan> getLatestPlan() {
-        return Result.ok(medicationService.getLatestPlan(UserContext.get()));
+    @GetMapping("/plan/list")
+    public Result<List<MedicationPlan>> getActivePlans() {
+        return Result.ok(medicationService.getActivePlans(UserContext.get()));
+    }
+
+    @PutMapping("/plan/{id}/stop")
+    public Result<Void> stopPlan(@PathVariable Long id) {
+        medicationService.stopPlan(UserContext.get(), id);
+        return Result.ok();
+    }
+
+    @DeleteMapping("/plan/{id}")
+    public Result<Void> deletePlan(@PathVariable Long id) {
+        medicationService.deletePlan(UserContext.get(), id);
+        return Result.ok();
     }
 
     @PostMapping("/log")

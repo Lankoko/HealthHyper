@@ -31,6 +31,27 @@ public class DailyLogService {
         return record;
     }
 
+    public DailyLog updateRecord(Long userId, Long id, DailyLogRequest req) {
+        DailyLog record = dailyLogMapper.selectById(id);
+        if (record == null || !record.getUserId().equals(userId)) {
+            throw new com.example.demo.common.BusinessException("记录不存在");
+        }
+        if (req.getLogType() != null) record.setLogType(req.getLogType());
+        if (req.getContent() != null) record.setContent(req.getContent());
+        if (req.getExtraJson() != null) record.setExtraJson(req.getExtraJson());
+        if (req.getLogDate() != null) record.setLogDate(req.getLogDate());
+        dailyLogMapper.updateById(record);
+        return record;
+    }
+
+    public void deleteRecord(Long userId, Long id) {
+        DailyLog record = dailyLogMapper.selectById(id);
+        if (record == null || !record.getUserId().equals(userId)) {
+            throw new com.example.demo.common.BusinessException("记录不存在");
+        }
+        dailyLogMapper.deleteById(id);
+    }
+
     public List<DailyLog> getRecords(Long userId, String logType, int days, int limit) {
         LocalDate since = LocalDate.now().minusDays(days);
         LambdaQueryWrapper<DailyLog> wrapper = new LambdaQueryWrapper<DailyLog>()

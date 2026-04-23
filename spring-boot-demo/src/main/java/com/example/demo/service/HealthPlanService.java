@@ -62,6 +62,26 @@ public class HealthPlanService {
         return plan;
     }
 
+    public HealthPlan updatePlan(Long userId, Long planId, HealthPlanRequest req) {
+        HealthPlan plan = healthPlanMapper.selectById(planId);
+        if (plan == null || !plan.getUserId().equals(userId)) {
+            throw new com.example.demo.common.BusinessException("计划不存在");
+        }
+        if (req.getTitle() != null) plan.setTitle(req.getTitle());
+        if (req.getContent() != null) plan.setItemsJson(req.getContent());
+        if (req.getSource() != null) plan.setSource(req.getSource());
+        healthPlanMapper.updateById(plan);
+        return plan;
+    }
+
+    public void deletePlan(Long userId, Long planId) {
+        HealthPlan plan = healthPlanMapper.selectById(planId);
+        if (plan == null || !plan.getUserId().equals(userId)) {
+            throw new com.example.demo.common.BusinessException("计划不存在");
+        }
+        healthPlanMapper.deleteById(planId);
+    }
+
     public List<HealthPlan> getPlans(Long userId, int days) {
         LocalDateTime since = LocalDate.now().minusDays(days).atStartOfDay();
         return healthPlanMapper.selectList(

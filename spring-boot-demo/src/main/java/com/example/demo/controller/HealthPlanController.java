@@ -25,6 +25,17 @@ public class HealthPlanController {
         return Result.ok(healthPlanService.createPlan(UserContext.get(), req));
     }
 
+    @PutMapping("/{id}")
+    public Result<HealthPlan> updatePlan(@PathVariable Long id, @RequestBody HealthPlanRequest req) {
+        return Result.ok(healthPlanService.updatePlan(UserContext.get(), id, req));
+    }
+
+    @DeleteMapping("/{id}")
+    public Result<Void> deletePlan(@PathVariable Long id) {
+        healthPlanService.deletePlan(UserContext.get(), id);
+        return Result.ok();
+    }
+
     @GetMapping
     public Result<List<HealthPlan>> getPlans(
             @RequestParam(defaultValue = "3") int days) {

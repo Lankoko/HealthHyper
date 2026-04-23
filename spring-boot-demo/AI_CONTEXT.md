@@ -181,7 +181,8 @@ com.example.demo/
 | POST | `/api/sleep/upload` | — | 上传睡眠数据（手机端），自动聚合夜间生理指标 |
 | GET | `/api/sleep/latest` | `obtain_single_night_sleep` | 最近一晚睡眠 |
 | GET | `/api/sleep/recent?days=` | `obtain_multi_night_sleep` | 最近N晚 |
-| PUT | `/api/sleep/{id}/analysis` | `update_sleep_analysis`（待AI补充） | AI 回填睡眠分析结论 |
+| PUT | `/api/sleep/latest/analysis` | `update_sleep_analysis` | AI 回填最新睡眠记录的分析结论（推荐） |
+| PUT | `/api/sleep/{id}/analysis` | `update_sleep_analysis` | 按 ID 回填指定记录的分析结论 |
 | GET | `/api/sleep/plan` | `get_sleep_plan` | 获取睡眠计划 |
 | PUT | `/api/sleep/plan` | `update_sleep_plan` | 更新睡眠计划 |
 
@@ -190,7 +191,7 @@ com.example.demo/
 | 方法 | 路径 | Tool 名 | 说明 |
 |------|------|---------|------|
 | POST | `/api/medication/plan` | `add_medication_plan` | 创建用药计划（startDate/endDate 可不传，默认今天起） |
-| GET | `/api/medication/plan/latest` | `obtain_medication_plan` | 获取最新计划 |
+| GET | `/api/medication/plan/list` | `obtain_medication_plan` | 获取全部有效用药计划 |
 | POST | `/api/medication/log` | `record_medication_taking` | 记录服药 |
 | GET | `/api/medication/log?days=` | `obtain_medication_log` | 最近服药记录（**含药品名等计划信息**） |
 
@@ -346,9 +347,9 @@ curl -X POST "http://中台地址:8080/api/ai/summary" \
 | sleep_analysis | `obtain_multi_night_sleep` | GET /api/sleep/recent?days= |
 | sleep_analysis | `get_sleep_plan` | GET /api/sleep/plan |
 | sleep_analysis | `update_sleep_plan` | PUT /api/sleep/plan |
-| sleep_analysis | `update_sleep_analysis`（待补） | PUT /api/sleep/{id}/analysis |
+| sleep_analysis | `update_sleep_analysis` | PUT /api/sleep/latest/analysis |
 | medication_assistant | `add_medication_plan` | POST /api/medication/plan |
-| medication_assistant | `obtain_medication_plan` | GET /api/medication/plan/latest |
+| medication_assistant | `obtain_medication_plan` | GET /api/medication/plan/list |
 | medication_assistant | `record_medication_taking` | POST /api/medication/log |
 | medication_assistant | `obtain_medication_log` | GET /api/medication/log?days= |
 | daily_tracking | `add_daily_record` | POST /api/daily |
@@ -411,7 +412,9 @@ curl -X POST "http://中台地址:8080/api/ai/summary" \
 - [x] vital_sign.flag → health_alert 自动生成 + severity>1 → AI 主动对话
 - [x] 健康计划打卡机制（status 0/1 + checkin/uncheckin 端点）
 - [x] 用药日志返回时附带关联药品计划信息
-- [x] 睡眠 AI 分析回填接口（PUT /api/sleep/{id}/analysis）
+- [x] 睡眠 AI 分析回填接口（PUT /api/sleep/latest/analysis 自动找最新 + PUT /api/sleep/{id}/analysis 按 ID）
+- [x] 用药计划返回全部有效列表（GET /api/medication/plan/list）
+- [x] 手机端删改接口补全（DailyLog、ChatSession、HealthPlan、MedicationPlan、MedicalRecord、SleepSession、HealthAlert）
 - [x] health_profile 变更 → 自动触发 AI 摘要更新
 - [x] ObjectMapper 注入修复（health_profile_history 可正常写入）
 - [x] ACTIONS 机制标记为遗留兼容

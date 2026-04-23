@@ -36,4 +36,16 @@ public class HealthAlertController {
         healthAlertService.markRead(UserContext.get(), id);
         return Result.ok();
     }
+
+    @PutMapping("/read-all")
+    public Result<Void> markAllRead() {
+        healthAlertService.markAllRead(UserContext.get());
+        return Result.ok();
+    }
+
+    @DeleteMapping("/{id}")
+    public Result<Void> deleteAlert(@PathVariable Long id) {
+        healthAlertService.deleteAlert(UserContext.get(), id);
+        return Result.ok();
+    }
 }

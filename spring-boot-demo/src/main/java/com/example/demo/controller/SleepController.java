@@ -38,6 +38,18 @@ public class SleepController {
         return Result.ok(sleepService.getRecentNights(UserContext.get(), days));
     }
 
+    @DeleteMapping("/{id}")
+    public Result<Void> deleteSleepSession(@PathVariable Long id) {
+        sleepService.deleteSleepSession(UserContext.get(), id);
+        return Result.ok();
+    }
+
+    @PutMapping("/latest/analysis")
+    public Result<SleepSession> updateLatestAnalysis(@RequestBody Map<String, String> body) {
+        return Result.ok(sleepService.updateLatestAiAnalysis(
+                UserContext.get(), body.get("aiAnalysis")));
+    }
+
     @PutMapping("/{id}/analysis")
     public Result<SleepSession> updateAnalysis(
             @PathVariable Long id,

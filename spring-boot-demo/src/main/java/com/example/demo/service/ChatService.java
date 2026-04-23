@@ -60,6 +60,16 @@ public class ChatService {
                         .orderByDesc(ChatSession::getUpdatedAt));
     }
 
+    public void deleteSession(Long userId, Long sessionId) {
+        ChatSession session = chatSessionMapper.selectById(sessionId);
+        if (session == null || !session.getUserId().equals(userId)) {
+            throw new BusinessException("会话不存在");
+        }
+        chatMessageMapper.delete(
+                new LambdaQueryWrapper<ChatMessage>().eq(ChatMessage::getSessionId, sessionId));
+        chatSessionMapper.deleteById(sessionId);
+    }
+
     public List<ChatMessage> getMessages(Long userId, Long sessionId) {
         ChatSession session = chatSessionMapper.selectById(sessionId);
         if (session == null || !session.getUserId().equals(userId)) {

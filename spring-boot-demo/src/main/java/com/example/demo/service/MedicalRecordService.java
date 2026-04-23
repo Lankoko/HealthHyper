@@ -33,6 +33,14 @@ public class MedicalRecordService {
         return record;
     }
 
+    public void deleteRecord(Long userId, Long id) {
+        MedicalRecord record = medicalRecordMapper.selectById(id);
+        if (record == null || !record.getUserId().equals(userId)) {
+            throw new com.example.demo.common.BusinessException("报告不存在");
+        }
+        medicalRecordMapper.deleteById(id);
+    }
+
     public List<MedicalRecord> listRecords(Long userId, String recordType, int limit) {
         LambdaQueryWrapper<MedicalRecord> wrapper = new LambdaQueryWrapper<MedicalRecord>()
                 .eq(MedicalRecord::getUserId, userId)

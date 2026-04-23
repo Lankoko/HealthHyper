@@ -33,6 +33,12 @@ public class ChatController {
         return Result.ok(chatService.listSessions(UserContext.get()));
     }
 
+    @DeleteMapping("/sessions/{sessionId}")
+    public Result<Void> deleteSession(@PathVariable Long sessionId) {
+        chatService.deleteSession(UserContext.get(), sessionId);
+        return Result.ok();
+    }
+
     @GetMapping("/sessions/{sessionId}/messages")
     public Result<List<ChatMessage>> getMessages(@PathVariable Long sessionId) {
         return Result.ok(chatService.getMessages(UserContext.get(), sessionId));

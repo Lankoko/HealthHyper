@@ -50,4 +50,23 @@ public class HealthAlertService {
         alert.setIsRead(1);
         healthAlertMapper.updateById(alert);
     }
+
+    public void markAllRead(Long userId) {
+        List<HealthAlert> unread = healthAlertMapper.selectList(
+                new LambdaQueryWrapper<HealthAlert>()
+                        .eq(HealthAlert::getUserId, userId)
+                        .eq(HealthAlert::getIsRead, 0));
+        for (HealthAlert alert : unread) {
+            alert.setIsRead(1);
+            healthAlertMapper.updateById(alert);
+        }
+    }
+
+    public void deleteAlert(Long userId, Long alertId) {
+        HealthAlert alert = healthAlertMapper.selectById(alertId);
+        if (alert == null || !alert.getUserId().equals(userId)) {
+            throw new BusinessException("告警不存在");
+        }
+        healthAlertMapper.deleteById(alertId);
+    }
 }

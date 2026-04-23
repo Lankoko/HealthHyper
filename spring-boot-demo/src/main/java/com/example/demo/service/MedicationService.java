@@ -43,13 +43,29 @@ public class MedicationService {
         return plan;
     }
 
-    public MedicationPlan getLatestPlan(Long userId) {
-        return planMapper.selectOne(
+    public List<MedicationPlan> getActivePlans(Long userId) {
+        return planMapper.selectList(
                 new LambdaQueryWrapper<MedicationPlan>()
                         .eq(MedicationPlan::getUserId, userId)
                         .eq(MedicationPlan::getStatus, 1)
-                        .orderByDesc(MedicationPlan::getCreatedAt)
-                        .last("LIMIT 1"));
+                        .orderByDesc(MedicationPlan::getCreatedAt));
+    }
+
+    public void stopPlan(Long userId, Long planId) {
+        MedicationPlan plan = planMapper.selectById(planId);
+        if (plan == null || !plan.getUserId().equals(userId)) {
+            throw new com.example.demo.common.BusinessException("用药计划不存在");
+        }
+        plan.setStatus(0);
+        planMapper.updateById(plan);
+    }
+
+    public void deletePlan(Long userId, Long planId) {
+        MedicationPlan plan = planMapper.selectById(planId);
+        if (plan == null || !plan.getUserId().equals(userId)) {
+            throw new com.example.demo.common.BusinessException("用药计划不存在");
+        }
+        planMapper.deleteById(planId);
     }
 
     public MedicationLog recordTaking(Long userId, MedicationTakingRequest req) {

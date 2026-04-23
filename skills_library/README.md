@@ -54,7 +54,8 @@ X-User-Id: <当前用户ID>
 |------|------|------|------|
 | `obtain_single_night_sleep` | GET | `/api/sleep/latest` | 无 |
 | `obtain_multi_night_sleep` | GET | `/api/sleep/recent` | `?days=7` |
-| `update_sleep_analysis`（待补 Skill） | PUT | `/api/sleep/{id}/analysis` | body: `{ "aiAnalysis": "分析结论文本" }` |
+| `update_sleep_analysis` | PUT | `/api/sleep/latest/analysis` | body: `{ "aiAnalysis": "分析结论文本" }`（自动回填最新记录） |
+| `update_sleep_analysis`（指定 ID） | PUT | `/api/sleep/{id}/analysis` | body: `{ "aiAnalysis": "分析结论文本" }` |
 | `get_sleep_plan` | GET | `/api/sleep/plan` | 无 |
 | `update_sleep_plan` | PUT | `/api/sleep/plan` | body: `{ "items_json": "[...]" }` |
 
@@ -63,7 +64,7 @@ X-User-Id: <当前用户ID>
 | Tool | 方法 | 路径 | 参数 |
 |------|------|------|------|
 | `add_medication_plan` | POST | `/api/medication/plan` | body: `{ drugName, dosage, frequency, timeSlots, notes }`（startDate/endDate 可不传，默认今天起） |
-| `obtain_medication_plan` | GET | `/api/medication/plan/latest` | 无 |
+| `obtain_medication_plan` | GET | `/api/medication/plan/list` | 无（返回全部有效计划列表） |
 | `record_medication_taking` | POST | `/api/medication/log` | body: `{ "drugName": "药品名", "time": "2026-04-09 08:15:00" }` |
 | `obtain_medication_log` | GET | `/api/medication/log` | `?days=3`（返回含药品名、剂量等计划信息） |
 

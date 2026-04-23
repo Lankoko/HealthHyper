@@ -25,6 +25,17 @@ public class DailyLogController {
         return Result.ok(dailyLogService.addRecord(UserContext.get(), req));
     }
 
+    @PutMapping("/{id}")
+    public Result<DailyLog> updateRecord(@PathVariable Long id, @RequestBody DailyLogRequest req) {
+        return Result.ok(dailyLogService.updateRecord(UserContext.get(), id, req));
+    }
+
+    @DeleteMapping("/{id}")
+    public Result<Void> deleteRecord(@PathVariable Long id) {
+        dailyLogService.deleteRecord(UserContext.get(), id);
+        return Result.ok();
+    }
+
     @GetMapping
     public Result<List<DailyLog>> getRecords(
             @RequestParam(required = false) String logType,

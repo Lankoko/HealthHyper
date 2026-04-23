@@ -25,6 +25,12 @@ public class MedicalRecordController {
         return Result.ok(medicalRecordService.generateReport(UserContext.get(), req));
     }
 
+    @DeleteMapping("/records/{id}")
+    public Result<Void> deleteRecord(@PathVariable Long id) {
+        medicalRecordService.deleteRecord(UserContext.get(), id);
+        return Result.ok();
+    }
+
     @GetMapping("/records")
     public Result<List<MedicalRecord>> listRecords(
             @RequestParam(required = false) String recordType,

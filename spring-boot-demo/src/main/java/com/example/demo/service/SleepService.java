@@ -116,8 +116,35 @@ public class SleepService {
         return plan;
     }
 
+    public void deleteSleepSession(Long userId, Long sessionId) {
+        SleepSession session = sleepSessionMapper.selectById(sessionId);
+        if (session == null || !session.getUserId().equals(userId)) {
+            throw new com.example.demo.common.BusinessException("睡眠记录不存在");
+        }
+        sleepStageMapper.delete(
+                new LambdaQueryWrapper<SleepStage>().eq(SleepStage::getSessionId, sessionId));
+        sleepSessionMapper.deleteById(sessionId);
+    }
+
     /**
-     * AI 异步回填睡眠分析结论。
+     * AI 回填最新一条睡眠记录的分析结论（无需指定 ID）。
+     */
+    public SleepSession updateLatestAiAnalysis(Long userId, String aiAnalysis) {
+        SleepSession session = sleepSessionMapper.selectOne(
+                new LambdaQueryWrapper<SleepSession>()
+                        .eq(SleepSession::getUserId, userId)
+                        .orderByDesc(SleepSession::getSleepDate)
+                        .last("LIMIT 1"));
+        if (session == null) {
+            throw new com.example.demo.common.BusinessException("暂无睡眠记录");
+        }
+        session.setAiAnalysis(aiAnalysis);
+        sleepSessionMapper.updateById(session);
+        return session;
+    }
+
+    /**
+     * 按 ID 回填指定睡眠记录的分析结论。
      */
     public SleepSession updateAiAnalysis(Long userId, Long sessionId, String aiAnalysis) {
         SleepSession session = sleepSessionMapper.selectById(sessionId);

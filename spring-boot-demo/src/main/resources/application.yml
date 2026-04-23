@@ -23,6 +23,6 @@ app:
     secret: HealthHyperJwtSecretKey2026ForDemoProjectX
     expiration-hours: 72
   ai:
-    base-url: https://52d030ce23074c63a2c3589460f6dac9--8000.ap-shanghai2.cloudstudio.club
+    base-url: http://192.168.43.5:8000
     mock-enabled: false  # true=本地mock，false=调真实云AI
     api-key: HealthHyperAiToolKey2026  # AI端调用中台接口的API Key

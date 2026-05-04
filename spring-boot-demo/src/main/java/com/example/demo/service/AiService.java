@@ -116,6 +116,15 @@ public class AiService {
                                 onContent.accept(content);
                             }
                         }
+                        // else if(node.has("status")) {
+                        //     String status = node.get("status").asText();
+                        //     if ("calling_tool".equals(status)) {
+                        //         String toolName = node.get("tool").asText();
+                        //         onContent.accept("<<TOOL_CALLING>>" + toolName);
+                        //     } else if ("generating".equals(status)) {
+                        //         onContent.accept("<<GENERATING>>");
+                        //     }
+                        // }
                     } catch (Exception e) {
                         log.warn("解析AI响应行失败: {}", trimmed);
                     }

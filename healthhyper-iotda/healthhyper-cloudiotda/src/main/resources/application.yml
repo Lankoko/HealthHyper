@@ -1,0 +1,21 @@
+huawei:
+  iotda:
+    # AK SK
+    ak: "HPUAPRHOGFCRCQT2VFAR"
+    sk: "6rJcdSlegq4ao8unWGUjA3yYD6MJT9IL9Hh3btce"
+    # REION
+    region: "cn-north-4"
+    # ENDPOINT
+    iotdaEndpoint: "3016d50b19.st1.iotda-app.cn-north-4.myhuaweicloud.com"
+    # 项目ID
+    projectId: "31cc306fc8ce45b28de66259873f300f"
+    # 实例ID
+    instanceId: "89f5fd0d-0121-487f-a79a-e704dd45237b"
+    # 资源空间ID
+    appId: "acea0c711cb943c6a3d1c2fff6350bac"
+    # 产品ID
+    productId: "697b57aecbb0cf6bb9391ee4"
+    # 服务ID
+    serviceId: "HealthHyperService"
+    # 测试 设备ID
+    deviceId: "697b57aecbb0cf6bb9391ee4_healthhyper0"

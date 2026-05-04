@@ -3,13 +3,14 @@
 ### 或把下面 @host 改成你的地址后，复制单条到 Apifox / Postman
 
 @host = http://localhost:8080
-@token = eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMyIsInVzZXJuYW1lIjoi5qGj5qGI5pu05paw5rWL6K-VIiwiaWF0IjoxNzc2ODM4NjkwLCJleHAiOjE3NzcwOTc4OTB9.NV1JDUJcvpa0ePDGZIsaR12lrIUm7aQyrkiSvcGy12Q
-@sessionId = 29
+@token = eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIyNCIsInVzZXJuYW1lIjoi5p2O54i354i3IiwiaWF0IjoxNzc3NzMyNTQ1LCJleHAiOjE3Nzc5OTE3NDV9.CH7XPq4Orh3jqENDwZIc6zjRyNEnVV3BRnBr0_-bOsY
+@sessionId = 170
 
 # ── AI 端认证（无需 token，用 API Key 即可）─────────────────────────
 # 把下面 @userId 换成你登录后返回的 userId（如 1）
 @apiKey = HealthHyperAiToolKey2026
-@userId = 13
+@userId = 24
+@iotdaDeviceId = 697b57aecbb0cf6bb9391ee4_healthhyper0
 
 ############################################
 # 1. 认证（无需 Token）
@@ -31,7 +32,7 @@ POST {{host}}/api/auth/login
 Content-Type: application/json
 
 {
-  "username": "档案更新测试",
+  "username": "李爷爷",
   "password": "123456"
 }
 
@@ -95,7 +96,7 @@ Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-  "text": "你好",
+  "text": "给我说一个睡眠故事",
   "imgBase64": null
 }
 
@@ -122,6 +123,43 @@ Authorization: Bearer {{token}}
 ############################################
 
 ############################################
+# 4b. 华为云 IoTDA 硬件数据 /api/iotda
+#    前置：
+#    - spring-boot-demo/application.yml: huawei.iotda.enabled=true 并填好 ak/sk 等配置
+#    - 已执行 healthhyper-cloudiotda 本地 install（本次已完成，跳过测试安装）
+#
+#    数据流：
+#    - 中台可定时拉取 IoTDA 影子写入 vital_sign
+#    - 手机也可轮询 /api/iotda/latest 触发一次拉取并返回
+############################################
+
+### 4b.1 绑定 IoTDA 设备（手机端，用 JWT）
+POST {{host}}/api/iotda/device/bind
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "iotdaDeviceId": "{{iotdaDeviceId}}",
+  "deviceName": "healthhyper0"
+}
+
+### 4b.2 查询当前绑定设备（手机端，用 JWT）
+GET {{host}}/api/iotda/device
+Authorization: Bearer {{token}}
+
+### 4b.3 手机轮询：拉取 IoTDA 最新影子并写入 vital_sign（手机端，用 JWT）
+GET {{host}}/api/iotda/latest
+Authorization: Bearer {{token}}
+
+### 4b.4 验证基线是否同步（若影子 reported 含 hrBase/spo2Base/...）
+GET {{host}}/api/baseline?metric=all
+Authorization: Bearer {{token}}
+
+### 4b.5 解绑设备（手机端，用 JWT）
+DELETE {{host}}/api/iotda/device
+Authorization: Bearer {{token}}
+
+############################################
 # 4. 实时生理数据 /api/vital
 #    模拟：手机上报数据 → AI 查询
 ############################################
@@ -133,12 +171,13 @@ Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-  "hr": 78,
+  "hr": 60,
   "spo2": 98,
   "bt": 36.6,
-  "activity": 10,
-  "sdann": 120.5,
-  "hrCv": 0.048,
+  "activity": 0.0017,
+  "turnOut": 0,
+  "sdann": 444,
+  "hrCv": 2.1827,
   "flag": 0
 }
 
@@ -167,11 +206,13 @@ Authorization: Bearer {{token}}
   "spo2": 92,
   "bt": 37.9,
   "activity": 5,
+  "turnOut": 1,
   "flag": 1
 }
 
-### 4.6 上报一条严重异常数据（flag=2，severity>1 → 自动生成告警 + 触发AI主动对话）
-### 执行后检查 health_alert 表和 chat_session 表（source=system_alert）
+### 4.6 上报一条严重异常数据（flag=2，severity>1 → 自动生成告警）
+### ⚠️ 当前「异常告警触发 AI 主动对话」功能已停用（代码保留，调用已注释）
+### 执行后检查 health_alert 表（chat_session 不会新增 system_alert 会话）
 POST {{host}}/api/vital/upload
 Content-Type: application/json
 Authorization: Bearer {{token}}
@@ -181,6 +222,7 @@ Authorization: Bearer {{token}}
   "spo2": 88,
   "bt": 38.5,
   "activity": 2,
+  "turnOut": 1,
   "flag": 2
 }
 
@@ -194,6 +236,7 @@ Authorization: Bearer {{token}}
   "spo2": 97,
   "bt": 36.3,
   "activity": 0,
+  "turnOut": 0,
   "flag": 0,
   "recordedAt": "2026-04-16T01:00:00"
 }
@@ -208,6 +251,7 @@ Authorization: Bearer {{token}}
   "spo2": 98,
   "bt": 36.1,
   "activity": 0,
+  "turnOut": 0,
   "flag": 0,
   "recordedAt": "2026-04-16T03:30:00"
 }
@@ -222,6 +266,7 @@ Authorization: Bearer {{token}}
   "spo2": 96,
   "bt": 36.4,
   "activity": 0,
+  "turnOut": 0,
   "flag": 0,
   "recordedAt": "2026-04-16T06:00:00"
 }
@@ -304,13 +349,29 @@ Authorization: Bearer {{token}}
   ]
 }
 
+### 6.1b 新版睡眠分期上报（sleep_stage2，百分比格式；原接口仍保留）
+POST {{host}}/api/sleep/upload2
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "sleepdate": "2026-04-15",
+  "startime": "2026-04-15 23:20:00",
+  "endtime": "2026-04-16 07:20:00",
+  "wake": "5%",
+  "n1": "8%",
+  "n2": "45%",
+  "n3": "20%",
+  "rem": "22%"
+}
+
 ### 6.2 AI Tool: 获取最近一晚睡眠（含分期统计、生理指标）
 GET {{host}}/api/sleep/latest
 X-Api-Key: {{apiKey}}
 X-User-Id: {{userId}}
 
-### 6.3 AI Tool: 获取最近3晚睡眠
-GET {{host}}/api/sleep/recent?days=3
+### 6.3 AI Tool: 获取最近30晚睡眠
+GET {{host}}/api/sleep/recent?days=30
 X-Api-Key: {{apiKey}}
 X-User-Id: {{userId}}
 
@@ -405,7 +466,7 @@ X-Api-Key: {{apiKey}}
 X-User-Id: {{userId}}
 
 {
-  "drugName": "头孢克洛",
+  "drugName": "删除",
   "time": "2026-04-09 08:15:00"
 }
 
@@ -424,6 +485,10 @@ X-User-Id: {{userId}}
 GET {{host}}/api/medication/log?days=3
 X-Api-Key: {{apiKey}}
 X-User-Id: {{userId}}
+
+### 7.7 手机端/AI端：删除一条服药记录（把 1 换成 7.4/7.5 返回的记录 id）
+DELETE {{host}}/api/medication/log/34
+Authorization: Bearer {{token}}
 
 ############################################
 # 8. 日常记录 /api/daily（纯日志记事本）
@@ -487,7 +552,7 @@ X-User-Id: {{userId}}
 
 {
   "logType": "other",
-  "content": "今天完成了散步和睡前不刷手机，没做到深呼吸练习",
+  "content": "坚毅不倒",
   "extraJson": "{\"note\":\"自由记录\"}"
 }
 

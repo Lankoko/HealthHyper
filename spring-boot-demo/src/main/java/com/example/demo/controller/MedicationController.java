@@ -50,6 +50,12 @@ public class MedicationController {
         return Result.ok(medicationService.recordTaking(UserContext.get(), req));
     }
 
+    @DeleteMapping("/log/{id}")
+    public Result<Void> deleteLog(@PathVariable Long id) {
+        medicationService.deleteLog(UserContext.get(), id);
+        return Result.ok();
+    }
+
     @GetMapping("/log")
     public Result<List<Map<String, Object>>> getLogs(
             @RequestParam(defaultValue = "3") int days) {

@@ -78,6 +78,30 @@ public class BaselineService {
         return bl;
     }
 
+    /**
+     * 设备影子同步基线：只更新影子中存在的字段，缺失字段保留原值。
+     * source 标记为 "device"，与 AI 更新的 "cloud_ai" 来源区分。
+     */
+    public void updateFromDevice(Long userId, Float hrBase, Float spo2Base,
+                                 Float btBase, Float hrCvBase, Float sdannBase) {
+        if (hrBase == null && spo2Base == null && btBase == null
+                && hrCvBase == null && sdannBase == null) return;
+
+        Baseline bl = getOrCreateLatest(userId, "device");
+        if (hrBase != null) bl.setHrBase(hrBase);
+        if (spo2Base != null) bl.setSpo2Base(spo2Base);
+        if (btBase != null) bl.setBtBase(btBase);
+        if (hrCvBase != null) bl.setHrCvBase(hrCvBase);
+        if (sdannBase != null) bl.setSdannBase(sdannBase);
+        bl.setEffectiveAt(LocalDateTime.now());
+        if (bl.getId() == null) {
+            bl.setCreatedAt(LocalDateTime.now());
+            baselineMapper.insert(bl);
+        } else {
+            baselineMapper.updateById(bl);
+        }
+    }
+
     private Baseline getOrCreateLatest(Long userId, String source) {
         Baseline latest = baselineMapper.selectOne(
                 new LambdaQueryWrapper<Baseline>()

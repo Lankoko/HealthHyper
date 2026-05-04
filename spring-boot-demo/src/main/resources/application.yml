@@ -26,3 +26,17 @@ app:
     base-url: http://192.168.43.5:8000
     mock-enabled: false  # true=本地mock，false=调真实云AI
     api-key: HealthHyperAiToolKey2026  # AI端调用中台接口的API Key
+
+huawei:
+  iotda:
+    ak: "HPUAPRHOGFCRCQT2VFAR"
+    sk: "6rJcdSlegq4ao8unWGUjA3yYD6MJT9IL9Hh3btce"
+    region: "cn-north-4"
+    iotda-endpoint: "3016d50b19.st1.iotda-app.cn-north-4.myhuaweicloud.com"
+    project-id: "31cc306fc8ce45b28de66259873f300f"
+    instance-id: "89f5fd0d-0121-487f-a79a-e704dd45237b"
+    app-id: "acea0c711cb943c6a3d1c2fff6350bac"
+    product-id: "697b57aecbb0cf6bb9391ee4"
+    service-id: "HealthHyperService"   # 设备上报的 serviceId，需与 IoTDA 产品模型一致
+    poll-interval-ms: 30000            # 中台主动拉取间隔（毫秒），默认 30s
+    enabled: true                      # true=启用IoTDA集成，false=跳过（避免无配置时启动失败）

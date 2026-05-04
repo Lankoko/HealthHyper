@@ -1,13 +1,16 @@
 package com.example.demo.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.demo.dto.sleep.SleepUpload2Request;
 import com.example.demo.dto.sleep.SleepUploadRequest;
 import com.example.demo.entity.HealthPlan;
 import com.example.demo.entity.SleepSession;
 import com.example.demo.entity.SleepStage;
+import com.example.demo.entity.SleepStage2;
 import com.example.demo.entity.VitalSign;
 import com.example.demo.mapper.HealthPlanMapper;
 import com.example.demo.mapper.SleepSessionMapper;
+import com.example.demo.mapper.SleepStage2Mapper;
 import com.example.demo.mapper.SleepStageMapper;
 import com.example.demo.mapper.VitalSignMapper;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +28,7 @@ public class SleepService {
 
     private final SleepSessionMapper sleepSessionMapper;
     private final SleepStageMapper sleepStageMapper;
+    private final SleepStage2Mapper sleepStage2Mapper;
     private final VitalSignMapper vitalSignMapper;
     private final HealthPlanMapper healthPlanMapper;
 
@@ -57,6 +61,61 @@ public class SleepService {
             }
         }
         return session;
+    }
+
+    /**
+     * 新版睡眠上报（sleep_stage2）：分期以百分比字符串传入，字段名与硬件 JSON 一致。
+     * 原 uploadSleep / sleep_stage 接口保持不变。
+     */
+    public SleepSession uploadSleep2(Long userId, SleepUpload2Request req) {
+        SleepSession session = new SleepSession();
+        session.setUserId(userId);
+        session.setSleepDate(parseDate(req.getSleepdate()));
+        session.setStartTime(parseDateTime(req.getStartime()));
+        session.setEndTime(parseDateTime(req.getEndtime()));
+        session.setCreatedAt(LocalDateTime.now());
+
+        if (session.getStartTime() != null && session.getEndTime() != null) {
+            aggregateNightVitals(userId, session.getStartTime(), session.getEndTime(), session);
+        }
+
+        sleepSessionMapper.insert(session);
+
+        SleepStage2 stage2 = new SleepStage2();
+        stage2.setSessionId(session.getId());
+        stage2.setWakePct(parsePct(req.getWake()));
+        stage2.setN1Pct(parsePct(req.getN1()));
+        stage2.setN2Pct(parsePct(req.getN2()));
+        stage2.setN3Pct(parsePct(req.getN3()));
+        stage2.setRemPct(parsePct(req.getRem()));
+        sleepStage2Mapper.insert(stage2);
+
+        return session;
+    }
+
+    /** 解析 "5%" → 5.0f，容错非标准输入 */
+    private Float parsePct(String pct) {
+        if (pct == null || pct.isBlank()) return null;
+        try {
+            return Float.parseFloat(pct.replace("%", "").trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private java.time.LocalDate parseDate(String s) {
+        if (s == null || s.isBlank()) return LocalDate.now();
+        try { return java.time.LocalDate.parse(s); } catch (Exception e) { return LocalDate.now(); }
+    }
+
+    private LocalDateTime parseDateTime(String s) {
+        if (s == null || s.isBlank()) return null;
+        // 支持 "2026-04-08 23:00:00" 和 "2026-04-08T23:00:00" 两种格式
+        try {
+            return LocalDateTime.parse(s.replace(" ", "T"));
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /**
@@ -123,6 +182,8 @@ public class SleepService {
         }
         sleepStageMapper.delete(
                 new LambdaQueryWrapper<SleepStage>().eq(SleepStage::getSessionId, sessionId));
+        sleepStage2Mapper.delete(
+                new LambdaQueryWrapper<SleepStage2>().eq(SleepStage2::getSessionId, sessionId));
         sleepSessionMapper.deleteById(sessionId);
     }
 
@@ -170,7 +231,7 @@ public class SleepService {
         DoubleSummaryStatistics spo2Stats = vitals.stream()
                 .filter(v -> v.getSpo2() != null).mapToDouble(v -> v.getSpo2()).summaryStatistics();
         DoubleSummaryStatistics btStats = vitals.stream()
-                .filter(v -> v.getBt() != null).mapToDouble(v -> v.getBt().doubleValue()).summaryStatistics();
+                .filter(v -> v.getBt() != null).mapToDouble(v -> (double) v.getBt()).summaryStatistics();
 
         if (hrStats.getCount() > 0) {
             session.setNightAvgHr((float) hrStats.getAverage());
@@ -241,6 +302,20 @@ public class SleepService {
             stagePercents.put(e.getKey(), String.format("%.1f%%", pct));
         }
         result.put("stage_percentages", stagePercents);
+
+        // 若有 sleep_stage2 记录（新版百分比格式），一并返回
+        SleepStage2 stage2 = sleepStage2Mapper.selectOne(
+                new LambdaQueryWrapper<SleepStage2>()
+                        .eq(SleepStage2::getSessionId, session.getId()));
+        if (stage2 != null) {
+            Map<String, Object> pct = new LinkedHashMap<>();
+            pct.put("wake", stage2.getWakePct());
+            pct.put("n1", stage2.getN1Pct());
+            pct.put("n2", stage2.getN2Pct());
+            pct.put("n3", stage2.getN3Pct());
+            pct.put("rem", stage2.getRemPct());
+            result.put("stage2_pct", pct);
+        }
 
         return result;
     }

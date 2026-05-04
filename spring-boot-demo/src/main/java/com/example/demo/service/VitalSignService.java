@@ -21,6 +21,7 @@ public class VitalSignService {
 
     private final VitalSignMapper vitalSignMapper;
     private final HealthAlertMapper healthAlertMapper;
+    @SuppressWarnings("unused")  // 保留注入，AI 告警触发功能暂停使用
     private final SystemTriggerService systemTriggerService;
 
     public VitalSign upload(Long userId, VitalSignUploadRequest req) {
@@ -31,6 +32,7 @@ public class VitalSignService {
         vs.setSpo2(req.getSpo2());
         vs.setBt(req.getBt());
         vs.setActivity(req.getActivity());
+        vs.setTurnOut(req.getTurnOut());
         vs.setSdann(req.getSdann());
         vs.setHrCv(req.getHrCv());
         vs.setFlag(req.getFlag() != null ? req.getFlag() : 0);
@@ -53,9 +55,10 @@ public class VitalSignService {
         alert.setCreatedAt(LocalDateTime.now());
 
         StringBuilder msg = new StringBuilder("硬件检测到异常(flag=").append(vs.getFlag()).append(")：");
-        if (vs.getHr() != null) msg.append("心率").append(vs.getHr()).append("bpm ");
-        if (vs.getSpo2() != null) msg.append("血氧").append(vs.getSpo2()).append("% ");
+        if (vs.getHr() != null) msg.append("心率").append(vs.getHr().intValue()).append("bpm ");
+        if (vs.getSpo2() != null) msg.append("血氧").append(vs.getSpo2().intValue()).append("% ");
         if (vs.getBt() != null) msg.append("体温").append(vs.getBt()).append("℃");
+        if (vs.getTurnOut() != null) msg.append(" 输出").append(vs.getTurnOut());
         alert.setMessage(msg.toString());
 
         if (vs.getHr() != null && vs.getHr() > 100) alert.setAlertType("hr_abnormal");
@@ -65,9 +68,10 @@ public class VitalSignService {
         healthAlertMapper.insert(alert);
         log.info("生成异常告警: userId={}, alertType={}, severity={}", userId, alert.getAlertType(), alert.getSeverity());
 
-        if (alert.getSeverity() > 1) {
-            systemTriggerService.triggerAlertChat(userId, alert);
-        }
+        // AI 主动告警对话暂停使用，保留代码备用
+        // if (alert.getSeverity() > 1) {
+        //     systemTriggerService.triggerAlertChat(userId, alert);
+        // }
     }
 
     /**
@@ -118,7 +122,7 @@ public class VitalSignService {
         if (all || "bt".equals(metric)) {
             result.put("bt", computeStats(records.stream()
                     .filter(r -> r.getBt() != null)
-                    .map(r -> r.getBt().doubleValue()).toList()));
+                    .map(r -> (double) r.getBt()).toList()));
         }
         return result;
     }
@@ -132,6 +136,7 @@ public class VitalSignService {
         if (all || "bt".equals(metric)) result.put("bt", vs.getBt());
         if (all) {
             result.put("activity", vs.getActivity());
+            result.put("turn_out", vs.getTurnOut());
             result.put("sdann", vs.getSdann());
             result.put("hr_cv", vs.getHrCv());
             result.put("flag", vs.getFlag());

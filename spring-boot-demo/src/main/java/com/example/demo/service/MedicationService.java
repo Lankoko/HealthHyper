@@ -96,6 +96,14 @@ public class MedicationService {
         return mlog;
     }
 
+    public void deleteLog(Long userId, Long logId) {
+        MedicationLog log = logMapper.selectById(logId);
+        if (log == null || !log.getUserId().equals(userId)) {
+            throw new com.example.demo.common.BusinessException("服药记录不存在");
+        }
+        logMapper.deleteById(logId);
+    }
+
     public List<Map<String, Object>> getLogs(Long userId, int days) {
         LocalDateTime since = LocalDate.now().minusDays(days).atStartOfDay();
         List<MedicationLog> logs = logMapper.selectList(

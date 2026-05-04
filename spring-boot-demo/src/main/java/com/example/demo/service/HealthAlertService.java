@@ -39,6 +39,7 @@ public class HealthAlertService {
         if (Boolean.TRUE.equals(unreadOnly)) {
             wrapper.eq(HealthAlert::getIsRead, 0);
         }
+        wrapper.last("LIMIT 20");
         return healthAlertMapper.selectList(wrapper);
     }
 

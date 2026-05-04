@@ -9,7 +9,9 @@
 
 **项目**：基于 AI 的个人健康管家系统（3 人毕业设计大赛）
 
-**架构**：`硬件(MCU) --蓝牙--> 手机(鸿蒙) --HTTP--> 中台(Spring Boot) --HTTP--> 云AI(LangChain)`
+**架构（双路数据流，同时支持两种方案）**：
+- 方案A（蓝牙直传，保留）：`硬件(MCU) --蓝牙--> 手机(鸿蒙) --POST /api/vital/upload--> 中台`
+- 方案B（云端IoT，新增）：`硬件(MCU) --MQTT--> 华为云IoTDA --中台@Scheduled拉取--> 中台 <--GET /api/iotda/latest-- 手机轮询`
 
 **本仓库**：中台部分，负责数据枢纽 + 业务引擎。
 
@@ -45,7 +47,23 @@ app:
     base-url: <云AI的地址>           # 当前为队友的 cloudstudio URL
     mock-enabled: false              # true=不调真AI用本地mock，false=调真实云AI
     api-key: HealthHyperAiToolKey2026  # AI端调用中台接口的API Key
+
+huawei:
+  iotda:
+    enabled: false           # ★ 改为 true 启用IoTDA；false时所有IoTDA Bean不加载
+    ak: "your-ak"
+    sk: "your-sk"
+    region: "cn-north-4"
+    iotda-endpoint: "xxx.iotda-app.cn-north-4.myhuaweicloud.com"
+    project-id: "xxx"
+    instance-id: "xxx"
+    app-id: "xxx"
+    product-id: "xxx"
+    service-id: "healthdata"   # 设备上报的 serviceId，需与IoTDA产品模型一致
+    poll-interval-ms: 30000    # 中台主动拉取间隔（ms），默认 30s
 ```
+
+> **IoTDA 启用前置条件**：在 `healthhyper-iotda/` 目录执行 `mvn -pl healthhyper-cloudiotda -am clean install` 将模块安装到本地 Maven 仓库，再将 `enabled` 改为 `true`。
 
 ---
 
@@ -81,7 +99,9 @@ com.example.demo/
 │   └── UserContext.java             # ThreadLocal<Long> 存当前登录用户 ID
 ├── config/
 │   ├── JwtInterceptor.java          # 拦截 /api/** 校验 Bearer token 或 API Key
-│   └── WebMvcConfig.java            # 注册拦截器 + CORS 放行
+│   ├── WebMvcConfig.java            # 注册拦截器 + CORS 放行
+│   ├── IotDaProperties.java         # @ConfigurationProperties(prefix="huawei.iotda")
+│   └── IotDaAutoConfiguration.java  # IoTDA Bean 注册（@ConditionalOnProperty enabled=true）
 ├── controller/
 │   ├── AuthController.java          # /api/auth/register, /api/auth/login
 │   ├── ChatController.java          # /api/chat/sessions/*, SSE 流式端点
@@ -94,7 +114,8 @@ com.example.demo/
 │   ├── MedicalRecordController.java # /api/medical/*
 │   ├── HealthPlanController.java    # /api/plan
 │   ├── AiSummaryController.java     # /api/ai/summary
-│   └── HealthAlertController.java   # /api/alert
+│   ├── HealthAlertController.java   # /api/alert
+│   └── IotDataController.java       # /api/iotda/* (设备绑定 + 手机轮询)
 ├── dto/
 │   ├── auth/     LoginRequest, RegisterRequest
 │   ├── chat/     ChatSendRequest
@@ -128,7 +149,8 @@ com.example.demo/
     ├── MedicalRecordService.java    # 医疗报告/记录
     ├── HealthPlanService.java       # 健康计划CRUD
     ├── AiSummaryService.java        # AI健康摘要/对话记忆
-    └── HealthAlertService.java      # 异常告警CRUD
+    ├── HealthAlertService.java      # 异常告警CRUD
+    └── IotDataService.java          # IoTDA设备影子拉取/解析/存储 + @Scheduled定时同步
 ```
 
 ---
@@ -139,8 +161,10 @@ com.example.demo/
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| POST | `/api/auth/register` | 注册，返回 token + userId |
-| POST | `/api/auth/login` | 登录，返回 token + userId |
+| POST | `/api/auth/register` | 注册，返回 token + userId + isNewUser |
+| POST | `/api/auth/login` | 登录，返回 token + userId + **isNewUser**（是否新用户，用于App引导页判断） |
+
+> `isNewUser=true` 表示该用户从未填写健康档案（`health_profile` 表无记录），App 应引导跳转至档案填写页。
 
 ### 5.2 AI 对话
 
@@ -166,6 +190,37 @@ com.example.demo/
 | GET | `/api/vital/current?metric=` | `get_current_physiological` | 获取最新生理数据 |
 | GET | `/api/vital/stats?metric=&days=` | `get_physiological_stats` | 获取统计信息 |
 
+### 5.4b IoTDA 硬件数据（新数据流，需 iotda.enabled=true）
+
+数据流说明：
+- **中台定时拉取**：`@Scheduled(fixedDelay=30s)` 遍历所有已绑定设备，调 `DeviceShadowService.queryShadowDetail()` 获取设备影子最新 reported 属性，解析后写入 `vital_sign` 表（走原有 `VitalSignService.upload()`，含 flag→告警逻辑）。
+- **手机主动拉取**：`GET /api/iotda/latest` 立即从 IoTDA 拉取一次并返回，同时存库。
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/iotda/device/bind` | 绑定 IoTDA deviceId 到当前用户，body: `{ "iotdaDeviceId": "xxx", "deviceName": "我的手环" }` |
+| GET | `/api/iotda/device` | 查询当前绑定设备 |
+| DELETE | `/api/iotda/device` | 解绑设备 |
+| GET | `/api/iotda/latest` | 立即从IoTDA拉取最新影子数据，解析写库并返回 |
+
+**IoTDA 设备属性字段映射（硬件上报的 serviceId 对应 `healthdata`）**：
+
+| 设备上报字段 | vital_sign 字段 | 说明 |
+|------------|----------------|------|
+| `hr` | `hr` | 心率（float；硬件可传整数，中台统一按浮点处理） |
+| `spo2` | `spo2` | 血氧（float；硬件可传整数，中台统一按浮点处理） |
+| `bt` | `bt` | 体温（float） |
+| `activity` | `activity` | 活动量（float） |
+| `turnOut` 或 `turn_out` | `turn_out` | 新增：turn_out（float） |
+| `sdann` | `sdann` | HRV-SDANN（float） |
+| `hrCv` 或 `hr_cv` | `hr_cv` | 心率变异系数（float） |
+| `flag` | `flag` | 异常标记 0-3（int） |
+
+> 中台兼容 camelCase (`hrCv`) 和 snake_case (`hr_cv`) 两种字段命名。
+> 数据写入 `vital_sign` 后，flag>0 仍会自动生成告警（`health_alert`）。
+> **注意：severity>1 触发 AI 主动对话功能已停用（代码保留，调用已注释）。**
+> **注意：IoTDA 设备影子基线同步（写 baseline 表）已停用（代码已注释），基线仅由 AI 维护。**
+
 ### 5.5 生理基线（对应 Skill: physiological_baseline）
 
 | 方法 | 路径 | Tool 名 | 说明 |
@@ -179,6 +234,7 @@ com.example.demo/
 | 方法 | 路径 | Tool 名 | 说明 |
 |------|------|---------|------|
 | POST | `/api/sleep/upload` | — | 上传睡眠数据（手机端），自动聚合夜间生理指标 |
+| POST | `/api/sleep/upload2` | — | **新版睡眠分期上传**（百分比格式，写入 sleep_stage2；旧表/旧接口保留） |
 | GET | `/api/sleep/latest` | `obtain_single_night_sleep` | 最近一晚睡眠 |
 | GET | `/api/sleep/recent?days=` | `obtain_multi_night_sleep` | 最近N晚 |
 | PUT | `/api/sleep/latest/analysis` | `update_sleep_analysis` | AI 回填最新睡眠记录的分析结论（推荐） |
@@ -194,6 +250,7 @@ com.example.demo/
 | GET | `/api/medication/plan/list` | `obtain_medication_plan` | 获取全部有效用药计划 |
 | POST | `/api/medication/log` | `record_medication_taking` | 记录服药 |
 | GET | `/api/medication/log?days=` | `obtain_medication_log` | 最近服药记录（**含药品名等计划信息**） |
+| DELETE | `/api/medication/log/{id}` | — | 删除一条服药记录（按 userId 校验归属） |
 
 ### 5.8 日常记录（对应 Skill: daily_tracking）
 
@@ -292,11 +349,10 @@ AI 侧自己维护多用户多标签页（thread）的对话记忆，**中台不
 - **流程**：中台将完整档案快照包装为消息 → 创建 source=`system_summary` 的会话 → 发送给 AI
 - **AI 预期行为**：使用 `conversation_summary` skill 更新健康摘要
 
-### 触发机制 2：异常告警 → AI 主动对话
-- **触发条件**：上报的 `vital_sign.flag > 0` 时自动生成 `health_alert`（severity = flag 值），当 **severity > 1** 时触发
-- **流程**：中台创建 source=`system_alert`、is_read=0 的会话 → 发送异常详情给 AI → AI 回复后存为 assistant 消息
-- **用户体验**：手机端看到一个"未读"会话，打开后就像 AI 主动关心用户
-- **AI 预期行为**：分析异常数据，给出健康建议，主动关心用户
+### 触发机制 2：异常告警 → AI 主动对话（已停用，代码保留）
+- **现状**：`vital_sign.flag > 0` 仍会自动生成 `health_alert`（severity = flag 值）。  
+  但 **severity > 1 触发 AI 主动对话** 当前已停用（调用已注释，后续可随时恢复）。
+- **用户体验**：目前手机端只会看到告警列表变化，不会新增 `system_alert` 会话。
 
 ---
 
@@ -352,6 +408,7 @@ curl -X POST "http://中台地址:8080/api/ai/summary" \
 | medication_assistant | `obtain_medication_plan` | GET /api/medication/plan/list |
 | medication_assistant | `record_medication_taking` | POST /api/medication/log |
 | medication_assistant | `obtain_medication_log` | GET /api/medication/log?days= |
+| medication_assistant | — | DELETE /api/medication/log/{id} |
 | daily_tracking | `add_daily_record` | POST /api/daily |
 | daily_tracking | `get_daily_records` | GET /api/daily?logType=&days=&limit= |
 | medical_report_analysis | `generate_medical_report` | POST /api/medical/report |
@@ -375,7 +432,7 @@ curl -X POST "http://中台地址:8080/api/ai/summary" \
 | 档案 | `health_profile`, `health_profile_history` | ✅ 已有代码 |
 | 设备 | `device` | ✅ 已有实体/Mapper |
 | 生理数据 | `vital_sign` | ✅ 已有代码（上报/查询/统计） |
-| 基线 | `baseline` | ✅ 已有代码（查询/更新） |
+| 基线 | `baseline` | ✅ 已有代码（查询/更新，仅AI维护，IoTDA设备同步已停用） |
 | 睡眠 | `sleep_session`, `sleep_stage` | ✅ 已有代码（上传/查询/聚合） |
 | 用药 | `medication_plan`, `medication_log` | ✅ 已有代码（计划CRUD/服药记录） |
 | 医疗记录 | `medical_record` | ✅ 已有代码（报告生成/查询） |
@@ -409,7 +466,7 @@ curl -X POST "http://中台地址:8080/api/ai/summary" \
 - [x] 异常告警（创建 / 列表 / 标记已读）
 - [x] 全部 AI Skill Tool 对应的 REST API 端点
 
-- [x] vital_sign.flag → health_alert 自动生成 + severity>1 → AI 主动对话
+- [x] vital_sign.flag → health_alert 自动生成（severity>1 → AI 主动对话：已停用，代码保留）
 - [x] 健康计划打卡机制（status 0/1 + checkin/uncheckin 端点）
 - [x] 用药日志返回时附带关联药品计划信息
 - [x] 睡眠 AI 分析回填接口（PUT /api/sleep/latest/analysis 自动找最新 + PUT /api/sleep/{id}/analysis 按 ID）
@@ -418,13 +475,16 @@ curl -X POST "http://中台地址:8080/api/ai/summary" \
 - [x] health_profile 变更 → 自动触发 AI 摘要更新
 - [x] ObjectMapper 注入修复（health_profile_history 可正常写入）
 - [x] ACTIONS 机制标记为遗留兼容
+- [x] 登录/注册返回 isNewUser 字段（判断是否需要引导填写档案）
+- [x] 华为云 IoTDA 集成（新数据流：IoTDA设备影子 → 中台定时拉取 → vital_sign → 手机轮询 /api/iotda/latest）
+- [x] IoTDA 设备影子基线同步已停用（IotDataService.syncBaseline() 注释掉，基线仅由 AI 维护，避免设备 30s 轮询覆盖 AI 基线）
 
 ### 待开发（按优先级）
 
 | 优先级 | 模块 | 备注 |
 |--------|------|------|
-| P1 | 通知轮询 | `/api/notify/poll`，手机端轮询 system_alert 会话 |
-| P2 | 设备管理 CRUD | `/api/device` |
+| P1 | 通知轮询 | `/api/notify/poll`，手机端轮询新告警/系统会话（system_alert 当前停用） |
+| P2 | IoTDA 订阅推送 | 当前是中台主动拉取影子，可升级为 IoTDA AMQP/HTTP 订阅推送，降低延迟 |
 | P3 | 用药依从率统计 | 超时未服药自动标记 missed |
 
 ---
@@ -437,6 +497,7 @@ curl -X POST "http://中台地址:8080/api/ai/summary" \
 4. **`chat_session.id` 全局自增**：天然满足"不同用户的 thread_id 不重复"的要求。
 5. **`UserContext.get()`**：在 Controller/Service 中通过 `UserContext.get()` 获取当前登录用户 ID，由 `JwtInterceptor` 在请求进入时写入 ThreadLocal（支持 JWT 和 API Key 两种来源）。
 6. **测试用例文件**：`spring-boot-demo/api-tests.http`（VS Code REST Client 格式）。
+7. **基线数据仅由 AI 维护**：IoTDA 设备影子基线同步已停用（`IotDataService.syncBaseline()` 已注释），`baseline` 表只存储 AI 通过 `PUT /api/baseline` / `PUT /api/baseline/all` 写入的记录，不会被设备 30s 轮询覆盖。
 
 ---
 
@@ -445,10 +506,25 @@ curl -X POST "http://中台地址:8080/api/ai/summary" \
 ```bash
 # 1. 确保 MySQL 中已执行 schema.sql
 # 2. 确认 application.yml 中数据库密码正确
-# 3. 启动
+# 3. 启动（IoTDA 默认 disabled，无需额外操作）
 cd spring-boot-demo
 .\mvnw.cmd spring-boot:run     # Windows
 ./mvnw spring-boot:run         # Mac/Linux
 # 4. 验证
 curl http://localhost:8080/api/auth/login -X POST -H "Content-Type: application/json" -d '{"username":"apitest1","password":"123456"}'
 ```
+
+### 启用华为云 IoTDA 数据流
+
+```bash
+# Step 1：在 healthhyper-iotda 目录安装本地模块
+cd healthhyper-iotda
+mvn -pl healthhyper-cloudiotda -am clean install
+
+# Step 2：在 application.yml 填写真实配置并启用
+# huawei.iotda.enabled: true
+# huawei.iotda.ak / sk / region / iotda-endpoint / project-id / instance-id / app-id / product-id
+
+# Step 3：重启中台，绑定设备后即开始定时同步
+# POST /api/iotda/device/bind  { "iotdaDeviceId": "设备在IoTDA平台的ID" }
+# GET  /api/iotda/latest        手动触发一次拉取验证

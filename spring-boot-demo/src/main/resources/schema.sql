@@ -57,16 +57,25 @@ CREATE TABLE IF NOT EXISTS `vital_sign` (
     `id`          BIGINT AUTO_INCREMENT PRIMARY KEY,
     `user_id`     BIGINT NOT NULL,
     `device_id`   BIGINT,
-    `hr`          SMALLINT,
-    `spo2`        SMALLINT,
-    `bt`          DECIMAL(4,1),
-    `activity`    SMALLINT,
+    `hr`          FLOAT,
+    `spo2`        FLOAT,
+    `bt`          FLOAT,
+    `activity`    FLOAT,
+    `turn_out`    FLOAT,
     `sdann`       FLOAT,
     `hr_cv`       FLOAT,
     `flag`        TINYINT NOT NULL DEFAULT 0,
     `recorded_at` DATETIME NOT NULL,
     INDEX `idx_user_recorded` (`user_id`, `recorded_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 已有数据库需手动执行以下迁移语句：
+-- ALTER TABLE `vital_sign`
+--   MODIFY `hr`       FLOAT,
+--   MODIFY `spo2`     FLOAT,
+--   MODIFY `bt`       FLOAT,
+--   MODIFY `activity` FLOAT,
+--   ADD COLUMN `turn_out` FLOAT AFTER `activity`;
 
 -- 6. 生理基线
 CREATE TABLE IF NOT EXISTS `baseline` (
@@ -111,6 +120,18 @@ CREATE TABLE IF NOT EXISTS `sleep_stage` (
     `stage`        VARCHAR(10) NOT NULL,
     `start_time`   DATETIME    NOT NULL,
     `duration_sec` INT         NOT NULL,
+    INDEX `idx_session_id` (`session_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 8b. 睡眠分期（简化格式，百分比）
+CREATE TABLE IF NOT EXISTS `sleep_stage2` (
+    `id`         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    `session_id` BIGINT NOT NULL,
+    `wake_pct`   FLOAT COMMENT '清醒占比（0-100）',
+    `n1_pct`     FLOAT COMMENT 'N1浅睡占比',
+    `n2_pct`     FLOAT COMMENT 'N2浅睡占比',
+    `n3_pct`     FLOAT COMMENT 'N3深睡占比（含N4）',
+    `rem_pct`    FLOAT COMMENT 'REM占比',
     INDEX `idx_session_id` (`session_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

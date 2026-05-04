@@ -2,6 +2,7 @@ package com.example.demo.controller;
 
 import com.example.demo.common.Result;
 import com.example.demo.common.UserContext;
+import com.example.demo.dto.sleep.SleepUpload2Request;
 import com.example.demo.dto.sleep.SleepUploadRequest;
 import com.example.demo.entity.HealthPlan;
 import com.example.demo.entity.SleepSession;
@@ -25,6 +26,16 @@ public class SleepController {
     @PostMapping("/upload")
     public Result<SleepSession> upload(@RequestBody SleepUploadRequest req) {
         return Result.ok(sleepService.uploadSleep(UserContext.get(), req));
+    }
+
+    /**
+     * 新版睡眠上报（sleep_stage2）。
+     * 分期以百分比字符串传入：{ "sleepdate":"", "startime":"", "endtime":"", "wake":"5%", "n1":"8%", ... }
+     * 原 /upload 接口不受影响。
+     */
+    @PostMapping("/upload2")
+    public Result<SleepSession> upload2(@RequestBody SleepUpload2Request req) {
+        return Result.ok(sleepService.uploadSleep2(UserContext.get(), req));
     }
 
     @GetMapping("/latest")

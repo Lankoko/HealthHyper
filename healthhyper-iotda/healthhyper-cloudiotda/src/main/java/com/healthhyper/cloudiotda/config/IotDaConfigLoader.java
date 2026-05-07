@@ -1,11 +1,11 @@
 package com.healthhyper.cloudiotda.config;
 
+import java.io.InputStream;
+import java.util.Map;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
-
-import java.io.InputStream;
-import java.util.Map;
 
 public class IotDaConfigLoader {
     private static final Logger logger = LoggerFactory.getLogger(IotDaConfigLoader.class);
@@ -24,6 +24,7 @@ public class IotDaConfigLoader {
         }
     }
 
+    @SuppressWarnings("unchecked")
     public static IotDaConfig loadCoreConfig() {
         Map<String, Object> huaweiMap = (Map<String, Object>) configMap.get("huawei");
         Map<String, Object> iotdaMap = (Map<String, Object>) huaweiMap.get("iotda");

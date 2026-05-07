@@ -4,10 +4,13 @@ server:
 spring:
   application:
     name: HealthHyper
+  jackson:
+    time-zone: Asia/Shanghai
+    date-format: yyyy-MM-dd HH:mm:ss
   datasource:
-    url: jdbc:mysql://localhost:3306/health_hyper?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
+    url: jdbc:mysql://test-db-mysql.ns-tghyj7d2.svc:3306/health_hyper?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
     username: root
-    password: 111111
+    password: r6mr2ngx
     driver-class-name: com.mysql.cj.jdbc.Driver
 
 mybatis-plus:
@@ -23,7 +26,7 @@ app:
     secret: HealthHyperJwtSecretKey2026ForDemoProjectX
     expiration-hours: 72
   ai:
-    base-url: http://192.168.43.5:8000
+    base-url: https://52d030ce23074c63a2c3589460f6dac9--8000.ap-shanghai2.cloudstudio.club
     mock-enabled: false  # true=本地mock，false=调真实云AI
     api-key: HealthHyperAiToolKey2026  # AI端调用中台接口的API Key
 

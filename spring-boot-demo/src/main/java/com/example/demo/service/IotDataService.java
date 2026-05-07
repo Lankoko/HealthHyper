@@ -18,6 +18,8 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -181,20 +183,32 @@ public class IotDataService {
     //     baselineService.updateFromDevice(userId, hrBase, spo2Base, btBase, hrCvBase, sdannBase);
     // }
 
+    /**
+     * 将 IoTDA 的 UTC 事件时间（带 Z 后缀）转换为北京时间的 LocalDateTime。
+     * IoTDA 格式示例：20260409T080000Z 或 2026-04-09T08:00:00.000Z
+     */
     private LocalDateTime parseEventTime(String eventTime) {
-        if (eventTime == null || eventTime.isBlank()) return LocalDateTime.now();
-        // IoTDA 格式示例：20260409T080000Z 或 2026-04-09T08:00:00Z
+        if (eventTime == null || eventTime.isBlank()) return LocalDateTime.now(ZoneId.of("Asia/Shanghai"));
         try {
-            if (eventTime.contains("-")) {
-                return LocalDateTime.parse(eventTime.replace("Z", ""),
-                        DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"));
-            } else {
-                return LocalDateTime.parse(eventTime.replace("Z", ""),
-                        DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss"));
+            // 统一补全为 ISO_INSTANT 可解析的格式：2026-04-09T08:00:00Z
+            String normalized = eventTime.trim();
+            if (!normalized.contains("-")) {
+                // 20260409T080000Z → 2026-04-09T08:00:00Z
+                normalized = normalized.replaceFirst(
+                        "^(\\d{4})(\\d{2})(\\d{2})T(\\d{2})(\\d{2})(\\d{2})",
+                        "$1-$2-$3T$4:$5:$6");
             }
+            if (!normalized.endsWith("Z") && !normalized.endsWith("z")) {
+                normalized += "Z";
+            }
+            // 解析为 UTC Instant，转为北京时间 LocalDateTime
+            ZonedDateTime utcZdt = ZonedDateTime.parse(normalized,
+                    DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssX"));
+            ZonedDateTime beijingZdt = utcZdt.withZoneSameInstant(ZoneId.of("Asia/Shanghai"));
+            return beijingZdt.toLocalDateTime();
         } catch (DateTimeParseException e) {
-            log.debug("IoTDA eventTime 解析失败: {}, 使用当前时间", eventTime);
-            return LocalDateTime.now();
+            log.debug("IoTDA eventTime 解析失败: {}, 使用当前北京时间", eventTime);
+            return LocalDateTime.now(ZoneId.of("Asia/Shanghai"));
         }
     }
 

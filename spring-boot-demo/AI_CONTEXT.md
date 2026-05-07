@@ -478,6 +478,8 @@ curl -X POST "http://中台地址:8080/api/ai/summary" \
 - [x] 登录/注册返回 isNewUser 字段（判断是否需要引导填写档案）
 - [x] 华为云 IoTDA 集成（新数据流：IoTDA设备影子 → 中台定时拉取 → vital_sign → 手机轮询 /api/iotda/latest）
 - [x] IoTDA 设备影子基线同步已停用（IotDataService.syncBaseline() 注释掉，基线仅由 AI 维护，避免设备 30s 轮询覆盖 AI 基线）
+- [x] IoTDA `recorded_at` 时区修复：华为云 `event_time` 是 UTC 时间（带 `Z` 后缀），`IotDataService.parseEventTime()` 通过 `ZonedDateTime` 转为北京时间后存入 `vital_sign.recorded_at`
+- [x] `IotDaConfigLoader` Unchecked cast 警告修复（添加 `@SuppressWarnings("unchecked")`）
 
 ### 待开发（按优先级）
 
@@ -498,6 +500,8 @@ curl -X POST "http://中台地址:8080/api/ai/summary" \
 5. **`UserContext.get()`**：在 Controller/Service 中通过 `UserContext.get()` 获取当前登录用户 ID，由 `JwtInterceptor` 在请求进入时写入 ThreadLocal（支持 JWT 和 API Key 两种来源）。
 6. **测试用例文件**：`spring-boot-demo/api-tests.http`（VS Code REST Client 格式）。
 7. **基线数据仅由 AI 维护**：IoTDA 设备影子基线同步已停用（`IotDataService.syncBaseline()` 已注释），`baseline` 表只存储 AI 通过 `PUT /api/baseline` / `PUT /api/baseline/all` 写入的记录，不会被设备 30s 轮询覆盖。
+8. **IoTDA 时间统一为北京时间**：华为云 IoTDA 设备影子的 `reported.event_time` 是 UTC 时间（如 `20260409T080000Z`），`IotDataService.parseEventTime()` 会通过 `ZonedDateTime` 转换为北京时间（`Asia/Shanghai`）后存入数据库。兜底分支（eventTime 为空时）也用 `LocalDateTime.now(ZoneId.of("Asia/Shanghai"))` 确保统一。
+9. **IotDaConfigLoader 是 YAML 解析器**：从 `application.yml` 读取华为云 IoTDA 配置，涉及 `Object → Map` 的强制转型（已加 `@SuppressWarnings("unchecked")` 抑制 IDE 警告）。该模块通过 `healthhyper-cloudiotda` 独立 jar 包引入，需先 `mvn install` 安装到本地仓库。
 
 ---
 
